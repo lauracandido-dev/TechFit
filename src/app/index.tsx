@@ -24,7 +24,7 @@ export default function LoginScreen() {
       Alert.alert('Erro', 'Por favor, preencha o e-mail e a senha.');
       return;
     }
-    // logica p banco de dados
+    // logica p banco de dados+
     Alert.alert('Sucesso', `Login de ${perfil} efetuado com sucesso!`);
   };
 

@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -11,6 +10,28 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { api, avisar } from '../services/api';
+import { Papel, Sessao, salvarSessao } from '../services/sessao';
+
+// Texto do botão -> valor que a API devolve
+const PERFIL_PARA_PAPEL: Record<string, Papel> = {
+  Aluno: 'aluno',
+  Professor: 'professor',
+  Nutricionista: 'nutricionista',
+};
+
+const NOME_DO_PAPEL: Record<Papel, string> = {
+  aluno: 'Aluno',
+  professor: 'Professor',
+  nutricionista: 'Nutricionista',
+};
+
+// Tela inicial de cada perfil
+const ROTA_INICIAL = {
+  aluno: '/inicioAluno',
+  professor: '/inicioProf',
+  nutricionista: '/inicioNutri',
+} as const;
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -18,14 +39,37 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [perfil, setPerfil] = useState('Aluno');//começa no aluno, padrão
+  const [carregando, setCarregando] = useState(false);
 
-  const handleLogin = () => {
-    if (!email || !senha) {
-      Alert.alert('Erro', 'Por favor, preencha o e-mail e a senha.');
+  const handleLogin = async () => {
+    if (!email.trim() || !senha) {
+      avisar('Erro', 'Por favor, preencha o e-mail e a senha.');
       return;
     }
-    // logica p banco de dados+
-    Alert.alert('Sucesso', `Login de ${perfil} efetuado com sucesso!`);
+
+    setCarregando(true);
+    try {
+      const dados = await api<Sessao>('/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: email.trim().toLowerCase(), senha }),
+      });
+
+      // O perfil escolhido na tela precisa bater com o perfil real da conta
+      if (dados.usuario.papel !== PERFIL_PARA_PAPEL[perfil]) {
+        avisar(
+          'Perfil incorreto',
+          `Este e-mail está cadastrado como ${NOME_DO_PAPEL[dados.usuario.papel]}. Selecione o perfil correto.`
+        );
+        return;
+      }
+
+      salvarSessao(dados);
+      router.replace(ROTA_INICIAL[dados.usuario.papel]);
+    } catch (e: any) {
+      avisar('Erro', e.message);
+    } finally {
+      setCarregando(false);
+    }
   };
 
   return (
@@ -96,8 +140,14 @@ export default function LoginScreen() {
           </View>
 
           {/* botao entrar */}
-          <TouchableOpacity style={styles.buttonPrimary} onPress={handleLogin}>
-            <Text style={styles.buttonTextPrimary}>Entrar</Text>
+          <TouchableOpacity
+            style={[styles.buttonPrimary, carregando && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={carregando}
+          >
+            <Text style={styles.buttonTextPrimary}>
+              {carregando ? 'Entrando...' : 'Entrar'}
+            </Text>
           </TouchableOpacity>
 
           {/* botao cadastro */}
@@ -199,6 +249,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 5,
     elevation: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   buttonTextPrimary: {
     color: '#FFFFFF',

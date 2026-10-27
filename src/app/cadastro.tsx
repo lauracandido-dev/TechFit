@@ -1,17 +1,24 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { api, avisar } from '../services/api';
+
+// Converte o texto do botão para o valor que a API espera
+const TIPO_API: Record<string, 'aluno' | 'professor' | 'nutricionista'> = {
+  Aluno: 'aluno',
+  Professor: 'professor',
+  Nutricionista: 'nutricionista',
+};
 
 export default function CadastroScreen() {
   const router = useRouter();
@@ -21,23 +28,39 @@ export default function CadastroScreen() {
   const [senha, setSenha] = useState('');
   const [perfil, setPerfil] = useState('Aluno'); 
   const [comprovacao, setComprovacao] = useState(''); // aprovação se for nutri ou prof
+  const [carregando, setCarregando] = useState(false);
 
-  const handleCadastro = () => {
-    if (!nome || !email || !senha) {
-      Alert.alert('Erro', 'Por favor, preencha todos os campos obrigatórios.');
+  const handleCadastro = async () => {
+    if (!nome.trim() || !email.trim() || !senha) {
+      avisar('Erro', 'Por favor, preencha todos os campos obrigatórios.');
       return;
     }
 
-    if ((perfil === 'Nutricionista' || perfil === 'Professor') && !comprovacao) {
+    if ((perfil === 'Nutricionista' || perfil === 'Professor') && !comprovacao.trim()) {
       const documento = perfil === 'Nutricionista' ? 'CRN' : 'CREF/Registro';
-      Alert.alert('Atenção', `Por favor, informe o seu ${documento} para comprovação.`);
+      avisar('Atenção', `Por favor, informe o seu ${documento} para comprovação.`);
       return;
     }
 
-    // logica pra BD
-    Alert.alert('Sucesso!', `Cadastro de ${perfil} realizado com sucesso!`, [
-      { text: 'OK', onPress: () => router.back() } // volta p login
-    ]);
+    setCarregando(true);
+    try {
+      await api('/cadastro', {
+        method: 'POST',
+        body: JSON.stringify({
+          tipo: TIPO_API[perfil],
+          nome: nome.trim(),
+          email: email.trim().toLowerCase(),
+          senha,
+          registro: perfil === 'Aluno' ? undefined : comprovacao.trim(),
+        }),
+      });
+
+      avisar('Sucesso!', `Cadastro de ${perfil} realizado com sucesso!`, () => router.back()); // volta p login
+    } catch (e: any) {
+      avisar('Erro', e.message);
+    } finally {
+      setCarregando(false);
+    }
   };
 
   return (
@@ -103,7 +126,7 @@ export default function CadastroScreen() {
 
               <TouchableOpacity
                 style={[styles.dropdownOption, perfil === 'Professor' && styles.optionSelected]}
-                onPress={() => setPerfil('Professor')}
+                onPress={() => { setPerfil('Professor'); setComprovacao(''); }}
               >
                 <Text style={[styles.optionText, perfil === 'Professor' && styles.optionTextSelected]}>
                   Professor
@@ -112,7 +135,7 @@ export default function CadastroScreen() {
 
               <TouchableOpacity
                 style={[styles.dropdownOption, perfil === 'Nutricionista' && styles.optionSelected]}
-                onPress={() => setPerfil('Nutricionista')}
+                onPress={() => { setPerfil('Nutricionista'); setComprovacao(''); }}
               >
                 <Text style={[styles.optionText, perfil === 'Nutricionista' && styles.optionTextSelected]}>
                   Nutricionista
@@ -148,8 +171,14 @@ export default function CadastroScreen() {
             )}
 
             {/* botao p cadastrar */}
-            <TouchableOpacity style={styles.buttonPrimary} onPress={handleCadastro}>
-              <Text style={styles.buttonTextPrimary}>Finalizar Cadastro</Text>
+            <TouchableOpacity
+              style={[styles.buttonPrimary, carregando && styles.buttonDisabled]}
+              onPress={handleCadastro}
+              disabled={carregando}
+            >
+              <Text style={styles.buttonTextPrimary}>
+                {carregando ? 'Cadastrando...' : 'Finalizar Cadastro'}
+              </Text>
             </TouchableOpacity>
 
             {/* volta p login */}
@@ -250,6 +279,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 5,
     elevation: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   buttonTextPrimary: {
     color: '#FFFFFF',

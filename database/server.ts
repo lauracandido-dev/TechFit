@@ -378,6 +378,54 @@ app.post('/dietas', autenticar, apenas('nutricionista'), h(async (req, res) => {
   res.status(201).json(r.rows[0]);
 }));
 
+
+// ---------------------------------------------------------------
+// Aluno: resumo (profissionais e objetivo) e edição de perfil
+// ---------------------------------------------------------------
+app.get('/aluno/resumo', autenticar, apenas('aluno'), h(async (req, res) => {
+  const prof = await pool.query(
+    `SELECT p.nome, v.objetivo
+     FROM alunoprofessor v JOIN usuarioProfessor p ON p.id_professor = v.FK_id_professor
+     WHERE v.FK_id_aluno = $1 ORDER BY v.criado_em DESC LIMIT 1`,
+    [req.user!.id]
+  );
+  const nutri = await pool.query(
+    `SELECT n.nome, v.objetivo
+     FROM alunonutricionista v JOIN usuarioNutri n ON n.id_nutricionista = v.FK_id_nutricionista
+     WHERE v.FK_id_aluno = $1 ORDER BY v.criado_em DESC LIMIT 1`,
+    [req.user!.id]
+  );
+  res.json({
+    professor: prof.rows[0]?.nome ?? null,
+    nutricionista: nutri.rows[0]?.nome ?? null,
+    objetivo: prof.rows[0]?.objetivo ?? nutri.rows[0]?.objetivo ?? null,
+  });
+}));
+
+app.patch('/aluno/perfil', autenticar, apenas('aluno'), h(async (req, res) => {
+  const { nome, email } = req.body;
+  if (!nome?.trim() || !email?.trim())
+    return res.status(400).json({ erro: 'Nome e e-mail são obrigatórios' });
+
+  const emailNovo = email.trim().toLowerCase();
+
+  // O e-mail não pode estar em uso por outra pessoa, em nenhuma das 3 tabelas
+  const emUso = await pool.query(
+    `SELECT 1 FROM usuarioAluno WHERE email = $1 AND id_aluno <> $2
+     UNION ALL SELECT 1 FROM usuarioProfessor WHERE email = $1
+     UNION ALL SELECT 1 FROM usuarioNutri WHERE email = $1`,
+    [emailNovo, req.user!.id]
+  );
+  if (emUso.rowCount) return res.status(409).json({ erro: 'E-mail já cadastrado' });
+
+  const r = await pool.query(
+    `UPDATE usuarioAluno SET nome = $1, email = $2 WHERE id_aluno = $3
+     RETURNING id_aluno AS id, nome, email`,
+    [nome.trim(), emailNovo, req.user!.id]
+  );
+  res.json(r.rows[0]);
+}));
+
 // ---------------------------------------------------------------
 // Tratamento de erros e inicialização
 // ---------------------------------------------------------------

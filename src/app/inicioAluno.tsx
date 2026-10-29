@@ -1,74 +1,222 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-    Alert,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { api, avisar } from '../services/api';
+import { getSessao, limparSessao, salvarSessao } from '../services/sessao';
+
+// ---------- Tipos do que a API devolve ----------
+interface AulaApi {
+  id_aula: number;
+  nome: string;
+  data: string;
+  horario: string;
+  capacidade: number;
+  vagas: number; // vagas restantes
+}
+interface ReservaApi {
+  id_reserva: number;
+  ativa: boolean;
+  id_aula: number;
+}
+interface ExercicioApi {
+  id_exercicio: number;
+  nome: string;
+  series: number;
+  repeticoes: number;
+  descanso: string;
+}
+interface TreinoApi {
+  id_treino: number;
+  objetivo: string;
+  observacoes: string;
+  professor: string;
+  exercicios: ExercicioApi[];
+}
+interface DietaApi {
+  id_dieta: number;
+  objetivo: string;
+  observacoes: string;
+  alimentacao: string;
+  nutricionista: string;
+}
+interface ResumoApi {
+  professor: string | null;
+  nutricionista: string | null;
+  objetivo: string | null;
+}
+
+// ---------- Funções auxiliares ----------
+
+// "2026-10-30" + "18:00:00" -> "Hoje, 18:00" / "Amanhã, 08:00" / "30/10, 18:00"
+function formatarQuando(data: string, horario: string) {
+  const dia = String(data).slice(0, 10);
+  const hora = String(horario).slice(0, 5);
+
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const hoje = new Date();
+  const amanha = new Date();
+  amanha.setDate(hoje.getDate() + 1);
+
+  if (dia === fmt(hoje)) return `Hoje, ${hora}`;
+  if (dia === fmt(amanha)) return `Amanhã, ${hora}`;
+  const [, mes, diaMes] = dia.split('-');
+  return `${diaMes}/${mes}, ${hora}`;
+}
+
+// A dieta é um texto só no banco. Cada linha no formato "Refeição: itens"
+// vira um cartão; linhas sem ":" aparecem só como texto.
+function separarRefeicoes(texto: string) {
+  return texto
+    .split('\n')
+    .map((linha) => linha.trim())
+    .filter(Boolean)
+    .map((linha) => {
+      const i = linha.indexOf(':');
+      return i > 0 && i < 40
+        ? { refeicao: linha.slice(0, i).trim(), itens: linha.slice(i + 1).trim() }
+        : { refeicao: '', itens: linha };
+    });
+}
 
 export default function InicioAlunoScreen() {
   const router = useRouter();
+  const sessao = getSessao();
+  const token = sessao?.token;
 
   // Controla as abas debaixo (incluindo 'perfil')
   const [abaAtiva, setAbaAtiva] = useState('inicio');
+  const [carregando, setCarregando] = useState(true);
+  const [processando, setProcessando] = useState<number | null>(null); // aula em andamento
+  const [salvando, setSalvando] = useState(false);
 
-  // Dados editáveis do perfil do aluno
-  const [alunoNome, setAlunoNome] = useState('João Silva');
-  const [alunoEmail, setAlunoEmail] = useState('joao.silva@techfit.com');
-  const [alunoObjetivo, setAlunoObjetivo] = useState('Hipertrofia');
-  const [professorResponsavel, setProfessorResponsavel] = useState('Carlos Eduardo');
-  const [nutriResponsavel, setNutriResponsavel] = useState('Ana Beatriz');
+  // Dados do perfil do aluno
+  const [nomeAtual, setNomeAtual] = useState(sessao?.usuario.nome ?? '');
+  const [alunoNome, setAlunoNome] = useState(sessao?.usuario.nome ?? '');
+  const [alunoEmail, setAlunoEmail] = useState(sessao?.usuario.email ?? '');
 
-  const handleSalvarPerfil = () => {
-    Alert.alert('Sucesso!', 'Informações do perfil atualizadas com sucesso!');
+  // Dados vindos do banco
+  const [resumo, setResumo] = useState<ResumoApi>({ professor: null, nutricionista: null, objetivo: null });
+  const [treino, setTreino] = useState<TreinoApi | null>(null);
+  const [dieta, setDieta] = useState<DietaApi | null>(null);
+  const [aulas, setAulas] = useState<AulaApi[]>([]);
+  const [reservas, setReservas] = useState<Record<number, number>>({}); // id_aula -> id_reserva ativa
+
+  // ---------- Sair e tratamento de erros ----------
+  const sair = () => {
+    limparSessao();
+    router.replace('/');
   };
 
-  // Treino do aluno
-  const treinoAluno = [
-    { exercicio: 'Supino Reto', series: '3', repeticoes: '12', descanso: '60s' },
-    { exercicio: 'Crucifixo com Halteres', series: '3', repeticoes: '10', descanso: '60s' },
-    { exercicio: 'Tríceps na Polia', series: '4', repeticoes: '15', descanso: '45s' },
-  ];
+  const tratarErro = (e: any) => {
+    if (/token/i.test(e.message)) {
+      avisar('Sessão expirada', 'Entre novamente para continuar.', sair);
+      return;
+    }
+    avisar('Erro', e.message);
+  };
 
-  // Dieta do aluno
-  const dietaAluno = [
-    { refeicao: 'Café da Manhã', itens: '3 ovos mexidos + 2 fatias de pão integral' },
-    { refeicao: 'Almoço', itens: '150g de frango grelhado + 150g de arroz + salada à vontade' },
-    { refeicao: 'Lanche da Tarde', itens: 'Vitamina de abacate com Whey Protein' },
-  ];
+  // ---------- Carregamento dos dados ----------
+  const carregarAulas = async () => {
+    const [listaAulas, minhas] = await Promise.all([
+      api<AulaApi[]>('/aulas', {}, token),
+      api<ReservaApi[]>('/reservas/minhas', {}, token),
+    ]);
+    setAulas(listaAulas);
 
-  // Aulas programadas
-  const [aulas, setAulas] = useState([
-    { id: '1', nome: 'CrossFit Avançado', horario: 'Hoje, 18:00', vagasTotais: 10, vagasInscritas: 10, inscrito: false },
-    { id: '2', nome: 'Spinning / Indoor Cycling', horario: 'Hoje, 19:00', vagasTotais: 15, vagasInscritas: 12, inscrito: false },
-    { id: '3', nome: 'Musculação Orientada', horario: 'Amanhã, 08:00', vagasTotais: 20, vagasInscritas: 8, inscrito: true },
-  ]);
+    const mapa: Record<number, number> = {};
+    minhas.filter((r) => r.ativa).forEach((r) => {
+      mapa[r.id_aula] = r.id_reserva;
+    });
+    setReservas(mapa);
+  };
+
+  useEffect(() => {
+    if (!token) {
+      router.replace('/');
+      return;
+    }
+
+    (async () => {
+      try {
+        const [dadosResumo, treinos, dietas] = await Promise.all([
+          api<ResumoApi>('/aluno/resumo', {}, token),
+          api<TreinoApi[]>('/treinos/meus', {}, token),
+          api<DietaApi[]>('/dietas/minhas', {}, token),
+          carregarAulas(),
+        ]);
+        setResumo(dadosResumo);
+        setTreino(treinos[0] ?? null); // o mais recente
+        setDieta(dietas[0] ?? null);
+      } catch (e: any) {
+        tratarErro(e);
+      } finally {
+        setCarregando(false);
+      }
+    })();
+  }, []);
+
+  // ---------- Ações ----------
+  const handleSalvarPerfil = async () => {
+    if (!alunoNome.trim() || !alunoEmail.trim()) {
+      avisar('Erro', 'Preencha o nome e o e-mail.');
+      return;
+    }
+
+    setSalvando(true);
+    try {
+      const atualizado = await api<{ id: number; nome: string; email: string }>(
+        '/aluno/perfil',
+        { method: 'PATCH', body: JSON.stringify({ nome: alunoNome, email: alunoEmail }) },
+        token
+      );
+
+      if (sessao) {
+        salvarSessao({
+          token: sessao.token,
+          usuario: { ...sessao.usuario, nome: atualizado.nome, email: atualizado.email },
+        });
+      }
+      setNomeAtual(atualizado.nome);
+      setAlunoNome(atualizado.nome);
+      setAlunoEmail(atualizado.email);
+      avisar('Sucesso!', 'Informações do perfil atualizadas com sucesso!');
+    } catch (e: any) {
+      tratarErro(e);
+    } finally {
+      setSalvando(false);
+    }
+  };
 
   // Função para se inscrever ou cancelar inscrição na aula
-  const handleToggleAula = (idAula: any) => {
-    setAulas((prevAulas) =>
-      prevAulas.map((aula) => {
-        if (aula.id === idAula) {
-          if (aula.inscrito) {
-            Alert.alert('Inscrição Cancelada', `Você saiu da aula de ${aula.nome}.`);
-            return { ...aula, inscrito: false, vagasInscritas: aula.vagasInscritas - 1 };
-          } else {
-            if (aula.vagasInscritas >= aula.vagasTotais) {
-              Alert.alert('Aula Lotada', 'Infelizmente esta aula atingiu o limite máximo de vagas.');
-              return aula;
-            }
-            Alert.alert('Sucesso!', `Você garantiu sua vaga na aula de ${aula.nome}!`);
-            return { ...aula, inscrito: true, vagasInscritas: aula.vagasInscritas + 1 };
-          }
-        }
-        return aula;
-      })
-    );
+  const handleToggleAula = async (aula: AulaApi) => {
+    const idReserva = reservas[aula.id_aula];
+    setProcessando(aula.id_aula);
+
+    try {
+      if (idReserva) {
+        await api(`/reservas/${idReserva}/cancelar`, { method: 'PATCH' }, token);
+        avisar('Inscrição Cancelada', `Você saiu da aula de ${aula.nome}.`);
+      } else {
+        await api('/reservas', { method: 'POST', body: JSON.stringify({ id_aula: aula.id_aula }) }, token);
+        avisar('Sucesso!', `Você garantiu sua vaga na aula de ${aula.nome}!`);
+      }
+      await carregarAulas();
+    } catch (e: any) {
+      tratarErro(e);
+      await carregarAulas().catch(() => {}); // atualiza as vagas mesmo após o erro
+    } finally {
+      setProcessando(null);
+    }
   };
 
   return (
@@ -78,26 +226,33 @@ export default function InicioAlunoScreen() {
         <View style={styles.headerTopRow}>
           <View>
             <Text style={styles.headerTitle}>Painel do Aluno</Text>
-            <Text style={styles.headerSubtitle}>Bem-vindo(a), {alunoNome}</Text>
+            <Text style={styles.headerSubtitle}>Bem-vindo(a), {nomeAtual}</Text>
           </View>
+
+          <TouchableOpacity style={styles.headerSair} onPress={sair}>
+            <Text style={styles.headerSairText}>Sair</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
-        
-        {abaAtiva === 'inicio' ? (
+
+        {carregando ? (
+          <ActivityIndicator size="large" color="#2563EB" style={{ marginTop: 40 }} />
+
+        ) : abaAtiva === 'inicio' ? (
           <View>
             <Text style={styles.sectionTitle}>Resumo da sua Conta</Text>
 
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Seu Objetivo</Text>
-              <Text style={styles.cardTextBold}>{alunoObjetivo}</Text>
+              <Text style={styles.cardTextBold}>{resumo.objetivo ?? 'Ainda não definido'}</Text>
             </View>
 
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Profissionais Responsáveis</Text>
-              <Text style={styles.cardText}>🏋️ Professor: {professorResponsavel}</Text>
-              <Text style={styles.cardText}>🥗 Nutricionista: {nutriResponsavel}</Text>
+              <Text style={styles.cardText}>🏋️ Professor: {resumo.professor ?? 'Ainda não vinculado'}</Text>
+              <Text style={styles.cardText}>🥗 Nutricionista: {resumo.nutricionista ?? 'Ainda não vinculado'}</Text>
             </View>
 
             <View style={styles.cardInfoBox}>
@@ -108,31 +263,65 @@ export default function InicioAlunoScreen() {
         ) : abaAtiva === 'treino' ? (
           <View>
             <Text style={styles.sectionTitle}>Seu Treino Atual</Text>
-            <Text style={styles.subtitleSub}>Montado por: {professorResponsavel}</Text>
 
-            {treinoAluno.map((item, index) => (
-              <View key={index} style={styles.cardTreino}>
-                <Text style={styles.cardTitleTreino}>{item.exercicio}</Text>
-                <View style={styles.detalhesTreinoRow}>
-                  <Text style={styles.badgeText}>Séries: {item.series}</Text>
-                  <Text style={styles.badgeText}>Repetições: {item.repeticoes}</Text>
-                  <Text style={styles.badgeText}>Descanso: {item.descanso}</Text>
-                </View>
+            {treino ? (
+              <>
+                <Text style={styles.subtitleSub}>Montado por: {treino.professor}</Text>
+
+                {treino.exercicios.map((item) => (
+                  <View key={item.id_exercicio} style={styles.cardTreino}>
+                    <Text style={styles.cardTitleTreino}>{item.nome}</Text>
+                    <View style={styles.detalhesTreinoRow}>
+                      <Text style={styles.badgeText}>Séries: {item.series}</Text>
+                      <Text style={styles.badgeText}>Repetições: {item.repeticoes}</Text>
+                      <Text style={styles.badgeText}>Descanso: {item.descanso}</Text>
+                    </View>
+                  </View>
+                ))}
+
+                {!!treino.observacoes && (
+                  <View style={styles.cardInfoBox}>
+                    <Text style={styles.infoBoxText}>📝 {treino.observacoes}</Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={styles.card}>
+                <Text style={styles.cardText}>
+                  Você ainda não tem um treino. Quando o seu professor montar um, ele aparece aqui.
+                </Text>
               </View>
-            ))}
+            )}
           </View>
 
         ) : abaAtiva === 'dieta' ? (
           <View>
             <Text style={styles.sectionTitle}>Sua Dieta Atual</Text>
-            <Text style={styles.subtitleSub}>Prescrita por: {nutriResponsavel}</Text>
 
-            {dietaAluno.map((item, index) => (
-              <View key={index} style={styles.cardDieta}>
-                <Text style={styles.cardTitleDieta}>{item.refeicao}</Text>
-                <Text style={styles.cardText}>{item.itens}</Text>
+            {dieta ? (
+              <>
+                <Text style={styles.subtitleSub}>Prescrita por: {dieta.nutricionista}</Text>
+
+                {separarRefeicoes(dieta.alimentacao).map((item, index) => (
+                  <View key={index} style={styles.cardDieta}>
+                    {!!item.refeicao && <Text style={styles.cardTitleDieta}>{item.refeicao}</Text>}
+                    <Text style={styles.cardText}>{item.itens}</Text>
+                  </View>
+                ))}
+
+                {!!dieta.observacoes && (
+                  <View style={styles.cardInfoBox}>
+                    <Text style={styles.infoBoxText}>📝 {dieta.observacoes}</Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={styles.card}>
+                <Text style={styles.cardText}>
+                  Você ainda não tem uma dieta. Quando o seu nutricionista montar uma, ela aparece aqui.
+                </Text>
               </View>
-            ))}
+            )}
           </View>
 
         ) : abaAtiva === 'aulas' ? (
@@ -140,42 +329,52 @@ export default function InicioAlunoScreen() {
             <Text style={styles.sectionTitle}>Aulas Programadas</Text>
             <Text style={styles.subtitleSub}>Selecione e garanta sua vaga na aula</Text>
 
+            {aulas.length === 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardText}>Nenhuma aula programada no momento.</Text>
+              </View>
+            )}
+
             {aulas.map((aula) => {
-              const lotada = aula.vagasInscritas >= aula.vagasTotais && !aula.inscrito;
+              const inscrito = !!reservas[aula.id_aula];
+              const inscritas = aula.capacidade - aula.vagas;
+              const lotada = aula.vagas <= 0 && !inscrito;
+              const ocupado = processando === aula.id_aula;
 
               return (
-                <View key={aula.id} style={styles.cardAula}>
+                <View key={aula.id_aula} style={styles.cardAula}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.cardTitle}>{aula.nome}</Text>
-                    <Text style={styles.cardText}>🕒 {aula.horario}</Text>
+                    <Text style={styles.cardText}>🕒 {formatarQuando(aula.data, aula.horario)}</Text>
                     <Text style={styles.vagasText}>
-                      Vagas: {aula.vagasInscritas} / {aula.vagasTotais} preenchidas
+                      Vagas: {inscritas} / {aula.capacidade} preenchidas
                     </Text>
                   </View>
 
                   <TouchableOpacity
                     style={[
                       styles.btnAula,
-                      aula.inscrito && styles.btnInscrito,
+                      inscrito && styles.btnInscrito,
                       lotada && styles.btnLotada,
                     ]}
-                    onPress={() => handleToggleAula(aula.id)}
-                    disabled={lotada}
+                    onPress={() => handleToggleAula(aula)}
+                    disabled={lotada || ocupado}
                   >
                     <Text
                       style={[
                         styles.btnAulaText,
-                        aula.inscrito && styles.btnInscritoText,
+                        inscrito && styles.btnInscritoText,
                         lotada && styles.btnLotadaText,
                       ]}
                     >
-                      {aula.inscrito ? 'Inscrito ✅' : lotada ? 'Lotada ❌' : 'Participar'}
+                      {ocupado ? '...' : inscrito ? 'Inscrito ✅' : lotada ? 'Lotada ❌' : 'Participar'}
                     </Text>
                   </TouchableOpacity>
                 </View>
               );
             })}
           </View>
+
         ) : (
           // aba 5
           <View>
@@ -194,17 +393,24 @@ export default function InicioAlunoScreen() {
               value={alunoEmail}
               onChangeText={setAlunoEmail}
               keyboardType="email-address"
+              autoCapitalize="none"
             />
 
-            <Text style={styles.label}>Objetivo Principal</Text>
+            <Text style={styles.label}>Objetivo Principal (definido pelo seu profissional)</Text>
             <TextInput
-              style={styles.input}
-              value={alunoObjetivo}
-              onChangeText={setAlunoObjetivo}
+              style={[styles.input, styles.inputDesabilitado]}
+              value={resumo.objetivo ?? 'Ainda não definido'}
+              editable={false}
             />
 
-            <TouchableOpacity style={styles.buttonPrimary} onPress={handleSalvarPerfil}>
-              <Text style={styles.buttonPrimaryText}>Salvar Alterações</Text>
+            <TouchableOpacity
+              style={[styles.buttonPrimary, salvando && { opacity: 0.6 }]}
+              onPress={handleSalvarPerfil}
+              disabled={salvando}
+            >
+              <Text style={styles.buttonPrimaryText}>
+                {salvando ? 'Salvando...' : 'Salvar Alterações'}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -266,11 +472,6 @@ export default function InicioAlunoScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Sair */}
-      <TouchableOpacity style={styles.logoutButton} onPress={() => router.back()}>
-        <Text style={styles.logoutText}>Sair da Conta</Text>
-      </TouchableOpacity>
-
     </SafeAreaView>
   );
 }
@@ -302,6 +503,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#DBEAFE',
     marginTop: 2,
+  },
+  headerSair: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  headerSairText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 13,
   },
   contentContainer: {
     padding: 20,
@@ -451,6 +663,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#1F2937',
   },
+  inputDesabilitado: {
+    backgroundColor: '#F3F4F6',
+    color: '#6B7280',
+  },
   buttonPrimary: {
     backgroundColor: '#2563EB',
     borderRadius: 10,
@@ -505,16 +721,5 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#1D4ED8',
     fontWeight: 'bold',
-  },
-  logoutButton: {
-    position: 'absolute',
-    bottom: 0,
-    alignSelf: 'center',
-    display: 'none',
-  },
-  logoutText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textDecorationLine: 'underline',
   },
 });

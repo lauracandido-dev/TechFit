@@ -1,36 +1,63 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    Alert,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { api, avisar } from '../services/api';
+import { getSessao, limparSessao } from '../services/sessao';
 
 export default function CadastrarAlunoScreen() {
   const router = useRouter();
+  const token = getSessao()?.token;
 
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
   const [objetivo, setObjetivo] = useState('');
+  const [salvando, setSalvando] = useState(false);
 
-  const handleSalvarAluno = () => {
-    if (!nome || !email || !objetivo) {
-      Alert.alert('Campos Obrigatórios', 'Por favor, preencha todos os campos do aluno.');
+  const handleSalvarAluno = async () => {
+    if (!nome.trim() || !email.trim() || !senha || !objetivo.trim()) {
+      avisar('Campos Obrigatórios', 'Por favor, preencha todos os campos do aluno.');
       return;
     }
 
-    Alert.alert(
-      'Sucesso!',
-      `Aluno(a) ${nome} cadastrado(a) e vinculado(a) à sua lista no banco de dados!`
-    );
+    setSalvando(true);
+    try {
+      const resposta = await api<{ mensagem: string }>(
+        '/alunos/cadastrar',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            nome: nome.trim(),
+            email: email.trim().toLowerCase(),
+            senha,
+            objetivo: objetivo.trim(),
+          }),
+        },
+        token
+      );
 
-    // Volta para o painel anterior
-    router.back();
+      // Volta para o painel anterior
+      avisar('Sucesso!', resposta.mensagem, () => router.back());
+    } catch (e: any) {
+      if (/token/i.test(e.message)) {
+        avisar('Sessão expirada', 'Entre novamente para continuar.', () => {
+          limparSessao();
+          router.replace('/');
+        });
+      } else {
+        avisar('Erro', e.message);
+      }
+    } finally {
+      setSalvando(false);
+    }
   };
 
   return (
@@ -59,9 +86,24 @@ export default function CadastrarAlunoScreen() {
           placeholder="lucas@email.com"
           placeholderTextColor="#A0AEC0"
           keyboardType="email-address"
+          autoCapitalize="none"
           value={email}
           onChangeText={setEmail}
         />
+
+        <Text style={styles.label}>Senha Inicial do Aluno</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Ex: techfit123"
+          placeholderTextColor="#A0AEC0"
+          autoCapitalize="none"
+          value={senha}
+          onChangeText={setSenha}
+        />
+        <Text style={styles.hintText}>
+          Informe esta senha ao aluno para o primeiro acesso. Se ele já tiver conta, o nome e a senha são
+          ignorados e ele apenas é vinculado a você.
+        </Text>
 
         <Text style={styles.label}>Objetivo Inicial</Text>
         <TextInput
@@ -72,8 +114,14 @@ export default function CadastrarAlunoScreen() {
           onChangeText={setObjetivo}
         />
 
-        <TouchableOpacity style={styles.buttonPrimary} onPress={handleSalvarAluno}>
-          <Text style={styles.buttonPrimaryText}>Cadastrar Aluno</Text>
+        <TouchableOpacity
+          style={[styles.buttonPrimary, salvando && { opacity: 0.6 }]}
+          onPress={handleSalvarAluno}
+          disabled={salvando}
+        >
+          <Text style={styles.buttonPrimaryText}>
+            {salvando ? 'Cadastrando...' : 'Cadastrar Aluno'}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -125,6 +173,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 15,
     color: '#1F2937',
+  },
+  hintText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 6,
+    lineHeight: 16,
   },
   buttonPrimary: {
     backgroundColor: '#2563EB',

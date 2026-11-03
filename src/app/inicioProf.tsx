@@ -1,7 +1,7 @@
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
+  ActivityIndicator,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -10,72 +10,278 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { api, avisar } from '../services/api';
+import { getSessao, limparSessao, salvarSessao } from '../services/sessao';
+
+// ---------- Tipos do que a API devolve ----------
+interface AlunoApi {
+  id_aluno: number;
+  nome: string;
+  email: string;
+  objetivo: string | null;
+  treino_atual: string | null;
+}
+interface ExercicioCat {
+  id_exercicio: number;
+  nome: string;
+}
+interface PerfilApi {
+  nome: string;
+  email: string;
+  cref: string;
+}
+interface ItemTreino {
+  id_exercicio: number;
+  nome: string;
+  series: number;
+  repeticoes: number;
+  descanso: string;
+}
 
 export default function InicioProfScreen() {
   const router = useRouter();
+  const sessao = getSessao();
+  const token = sessao?.token;
 
   // controla as abas debaixo
   const [abaAtiva, setAbaAtiva] = useState('alunos');
+  const [carregando, setCarregando] = useState(true);
 
-  // dados do perfil do professor logado (simulação)
-  const [profNome, setProfNome] = useState('Carlos Eduardo');
-  const [profEmail, setProfEmail] = useState('carlos.prof@techfit.com');
-  const [profCref, setProfCref] = useState('012345-G/SP');
+  // dados vindos do banco
+  const [alunos, setAlunos] = useState<AlunoApi[]>([]);
+  const [catalogo, setCatalogo] = useState<ExercicioCat[]>([]);
 
-  const handleSalvarPerfil = () => {
-    Alert.alert('Sucesso!', 'Informações do perfil atualizadas com sucesso!');
-  };
+  // dados do perfil do professor logado
+  const [profNome, setProfNome] = useState('');
+  const [profEmail, setProfEmail] = useState('');
+  const [profCref, setProfCref] = useState('');
+  const [salvandoPerfil, setSalvandoPerfil] = useState(false);
 
-  // lista de alunos
-  const listaAlunos = [
-    { id: '1', nome: 'João Silva', objetivo: 'Hipertrofia', treino: 'supino' },
-    { id: '2', nome: 'Maria Souza', objetivo: 'Emagrecimento', treino: 'supino' },
-  ];
-
-  const [alunoSelecionado, setAlunoSelecionado] = useState('João Silva');
+  // montagem do treino
+  const [alunoSelecionadoId, setAlunoSelecionadoId] = useState<number | null>(null);
   const [objetivoTreino, setObjetivoTreino] = useState('');
-
-  const exerciciosDisponiveis = [
-    { id: '1', nome: 'Supino Reto (Aparelho/Barra)' },
-    { id: '2', nome: 'Puxada Alta na Polia' },
-    { id: '3', nome: 'Agachamento Livre / Smith' },
-    { id: '4', nome: 'Rosca Direta com Halteres' },
-    { id: '5', nome: 'Tríceps na Polia com Corda' },
-    { id: '6', nome: 'Outro (Personalizado)' },
-  ];
-
-  const [exercicioEscolhido, setExercicioEscolhido] = useState('Supino Reto (Aparelho/Barra)');
+  const [observacoes, setObservacoes] = useState('');
+  const [exercicioId, setExercicioId] = useState<number>(0); // 0 = "Outro (Personalizado)"
   const [nomeOutroExercicio, setNomeOutroExercicio] = useState('');
-
   const [series, setSeries] = useState('3');
   const [repeticoes, setRepeticoes] = useState('12');
   const [descanso, setDescanso] = useState('60s');
+  const [itensTreino, setItensTreino] = useState<ItemTreino[]>([]);
+  const [adicionando, setAdicionando] = useState(false);
+  const [salvandoTreino, setSalvandoTreino] = useState(false);
 
-  const handleEditarTreinoAluno = (nomeAluno: string) => {
-    setAlunoSelecionado(nomeAluno);
+  const alunoSelecionado = alunos.find((a) => a.id_aluno === alunoSelecionadoId) ?? null;
+
+  // ---------- Sair e tratamento de erros ----------
+  const sair = () => {
+    limparSessao();
+    router.replace('/');
+  };
+
+  const tratarErro = (e: any) => {
+    if (/token/i.test(e.message)) {
+      avisar('Sessão expirada', 'Entre novamente para continuar.', sair);
+      return;
+    }
+    avisar('Erro', e.message);
+  };
+
+  // ---------- Carregamento dos dados ----------
+  const carregarAlunos = async () => {
+    const lista = await api<AlunoApi[]>('/professor/alunos', {}, token);
+    setAlunos(lista);
+    return lista;
+  };
+
+  useEffect(() => {
+    if (!token) {
+      router.replace('/');
+      return;
+    }
+
+    (async () => {
+      try {
+        const [listaAlunos, exercicios, perfil] = await Promise.all([
+          carregarAlunos(),
+          api<ExercicioCat[]>('/exercicios', {}, token),
+          api<PerfilApi>('/professor/perfil', {}, token),
+        ]);
+        setCatalogo(exercicios);
+        setAlunoSelecionadoId(listaAlunos[0]?.id_aluno ?? null);
+        setExercicioId(exercicios[0]?.id_exercicio ?? 0);
+        setProfNome(perfil.nome);
+        setProfEmail(perfil.email);
+        setProfCref(perfil.cref);
+      } catch (e: any) {
+        tratarErro(e);
+      } finally {
+        setCarregando(false);
+      }
+    })();
+  }, []);
+  // Atualiza a lista de alunos ao voltar de outra tela (ex.: Cadastrar Novo Aluno)
+
+  
+useFocusEffect(
+  useCallback(() => {
+    if (!token) return;
+    carregarAlunos()
+      .then((lista) => setAlunoSelecionadoId((atual) => atual ?? lista[0]?.id_aluno ?? null))
+      .catch(() => {});
+  }, [token])
+);
+
+  // ---------- Ações ----------
+  const handleSalvarPerfil = async () => {
+    if (!profNome.trim() || !profEmail.trim() || !profCref.trim()) {
+      avisar('Erro', 'Preencha nome, e-mail e CREF.');
+      return;
+    }
+
+    setSalvandoPerfil(true);
+    try {
+      const atualizado = await api<PerfilApi>(
+        '/professor/perfil',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ nome: profNome, email: profEmail, cref: profCref }),
+        },
+        token
+      );
+
+      if (sessao) {
+        salvarSessao({
+          token: sessao.token,
+          usuario: { ...sessao.usuario, nome: atualizado.nome, email: atualizado.email },
+        });
+      }
+      setProfNome(atualizado.nome);
+      setProfEmail(atualizado.email);
+      setProfCref(atualizado.cref);
+      avisar('Sucesso!', 'Informações do perfil atualizadas com sucesso!');
+    } catch (e: any) {
+      tratarErro(e);
+    } finally {
+      setSalvandoPerfil(false);
+    }
+  };
+
+  // Trocar de aluno começa um treino novo (evita enviar o treino para o aluno errado)
+  const selecionarAluno = (id: number) => {
+    if (id !== alunoSelecionadoId) {
+      setItensTreino([]);
+      setObjetivoTreino('');
+      setObservacoes('');
+    }
+    setAlunoSelecionadoId(id);
+  };
+
+  const handleEditarTreinoAluno = (id: number) => {
+    selecionarAluno(id);
     setAbaAtiva('treinos');
   };
 
-  const handleSalvarTreino = () => {
-    if (!objetivoTreino) {
-      Alert.alert('Erro', 'Por favor, informe o objetivo do treino.');
+  // Adiciona o exercício preenchido à lista do treino
+  const handleAdicionarExercicio = async () => {
+    const s = parseInt(series, 10);
+    const r = parseInt(repeticoes, 10);
+
+    if (!s || s <= 0 || !r || r <= 0) {
+      avisar('Erro', 'Informe séries e repetições com números maiores que zero.');
+      return;
+    }
+    if (!descanso.trim()) {
+      avisar('Erro', 'Informe o tempo de descanso.');
+      return;
+    }
+    if (exercicioId === 0 && !nomeOutroExercicio.trim()) {
+      avisar('Erro', 'Por favor, digite o nome do exercício personalizado.');
       return;
     }
 
-    const exercicioFinal = exercicioEscolhido === 'Outro (Personalizado)' ? nomeOutroExercicio : exercicioEscolhido;
+    setAdicionando(true);
+    try {
+      let id = exercicioId;
+      let nome = catalogo.find((e) => e.id_exercicio === exercicioId)?.nome ?? '';
 
-    if (exercicioEscolhido === 'Outro (Personalizado)' && !nomeOutroExercicio) {
-      Alert.alert('Erro', 'Por favor, digite o nome do exercício personalizado.');
+      // Exercício personalizado: cria (ou reaproveita) no catálogo do banco
+      if (exercicioId === 0) {
+        const novo = await api<ExercicioCat>(
+          '/exercicios',
+          { method: 'POST', body: JSON.stringify({ nome: nomeOutroExercicio.trim() }) },
+          token
+        );
+        id = novo.id_exercicio;
+        nome = novo.nome;
+        setCatalogo((prev) =>
+          prev.some((e) => e.id_exercicio === id)
+            ? prev
+            : [...prev, novo].sort((a, b) => a.nome.localeCompare(b.nome))
+        );
+        setExercicioId(id);
+        setNomeOutroExercicio('');
+      }
+
+      setItensTreino((prev) => [
+        ...prev,
+        { id_exercicio: id, nome, series: s, repeticoes: r, descanso: descanso.trim() },
+      ]);
+    } catch (e: any) {
+      tratarErro(e);
+    } finally {
+      setAdicionando(false);
+    }
+  };
+
+  const handleRemoverExercicio = (index: number) => {
+    setItensTreino((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSalvarTreino = async () => {
+    if (!alunoSelecionado) {
+      avisar('Erro', 'Selecione um aluno.');
+      return;
+    }
+    if (!objetivoTreino.trim()) {
+      avisar('Erro', 'Por favor, informe o objetivo do treino.');
+      return;
+    }
+    if (itensTreino.length === 0) {
+      avisar('Erro', 'Adicione ao menos um exercício ao treino.');
       return;
     }
 
-    Alert.alert(
-      'Sucesso!',
-      `Treino de ${alunoSelecionado} atualizado!\nExercício: ${exercicioFinal} (${series}x${repeticoes}, Descanso: ${descanso})`
-    );
+    setSalvandoTreino(true);
+    try {
+      await api(
+        '/treinos',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            id_aluno: alunoSelecionado.id_aluno,
+            objetivo: objetivoTreino.trim(),
+            observacoes: observacoes.trim(),
+            exercicios: itensTreino.map(({ id_exercicio, series, repeticoes, descanso }) => ({
+              id_exercicio,
+              series,
+              repeticoes,
+              descanso,
+            })),
+          }),
+        },
+        token
+      );
 
-    setObjetivoTreino('');
-    setNomeOutroExercicio('');
+      avisar('Sucesso!', `Treino de ${alunoSelecionado.nome} salvo com ${itensTreino.length} exercício(s)!`);
+      setItensTreino([]);
+      setObjetivoTreino('');
+      setObservacoes('');
+      await carregarAlunos();
+    } catch (e: any) {
+      tratarErro(e);
+    } finally {
+      setSalvandoTreino(false);
+    }
   };
 
   return (
@@ -93,24 +299,37 @@ export default function InicioProfScreen() {
 
       <ScrollView contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
 
-        {abaAtiva === 'alunos' ? (
+        {carregando ? (
+          <ActivityIndicator size="large" color="#D97706" style={{ marginTop: 40 }} />
+
+        ) : abaAtiva === 'alunos' ? (
           // aba 1
           <View>
             <Text style={styles.sectionTitle}>Alunos Acompanhados</Text>
 
-            {listaAlunos.map((aluno) => (
-              <View key={aluno.id} style={styles.card}>
+            {alunos.length === 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardText}>
+                  Você ainda não tem alunos vinculados. Use o botão abaixo para cadastrar o primeiro.
+                </Text>
+              </View>
+            )}
+
+            {alunos.map((aluno) => (
+              <View key={aluno.id_aluno} style={styles.card}>
                 <View style={styles.cardInfo}>
                   <Text style={styles.cardTitle}>{aluno.nome}</Text>
-                  <Text style={styles.cardText}>Objetivo: {aluno.objetivo}</Text>
-                  <Text style={styles.cardText}>Treino Atual: {aluno.treino}</Text>
+                  <Text style={styles.cardText}>Objetivo: {aluno.objetivo ?? 'Não definido'}</Text>
+                  <Text style={styles.cardText}>Treino Atual: {aluno.treino_atual ?? 'Nenhum treino ainda'}</Text>
                 </View>
 
                 <TouchableOpacity
                   style={styles.editButton}
-                  onPress={() => handleEditarTreinoAluno(aluno.nome)}
+                  onPress={() => handleEditarTreinoAluno(aluno.id_aluno)}
                 >
-                  <Text style={styles.editButtonText}>Editar Treino</Text>
+                  <Text style={styles.editButtonText}>
+                    {aluno.treino_atual ? 'Editar Treino' : 'Montar Treino'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             ))}
@@ -120,115 +339,188 @@ export default function InicioProfScreen() {
               onPress={() => router.push('/cadastrarAluno' as any)}
             >
               <Text style={styles.buttonActionText}>+ Cadastrar Novo Aluno</Text>
-            </TouchableOpacity>          </View>
+            </TouchableOpacity>
+          </View>
+
         ) : abaAtiva === 'treinos' ? (
           // aba 2
           <View>
             <Text style={styles.sectionTitle}>Montar/Editar Treino</Text>
 
-            <Text style={styles.label}>Selecione o Aluno:</Text>
-            <View style={styles.alunoSelectorContainer}>
-              {listaAlunos.map((aluno) => (
-                <TouchableOpacity
-                  key={aluno.id}
-                  style={[
-                    styles.alunoChip,
-                    alunoSelecionado === aluno.nome && styles.alunoChipSelected
-                  ]}
-                  onPress={() => setAlunoSelecionado(aluno.nome)}
-                >
-                  <Text style={[
-                    styles.alunoChipText,
-                    alunoSelecionado === aluno.nome && styles.alunoChipTextSelected
-                  ]}>
-                    {aluno.nome}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.label}>Objetivo do Treino</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ex: Hipertrofia de Membros Superiores"
-              placeholderTextColor="#A0AEC0"
-              value={objetivoTreino}
-              onChangeText={setObjetivoTreino}
-            />
-
-            <Text style={styles.label}>Selecione o Exercício:</Text>
-            <View style={styles.pickerContainer}>
-              {exerciciosDisponiveis.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[
-                    styles.exercicioOption,
-                    exercicioEscolhido === item.nome && styles.exercicioSelected,
-                  ]}
-                  onPress={() => setExercicioEscolhido(item.nome)}
-                >
-                  <Text
-                    style={[
-                      styles.exercicioText,
-                      exercicioEscolhido === item.nome && styles.exercicioTextSelected,
-                    ]}
-                  >
-                    {item.nome}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {exercicioEscolhido === 'Outro (Personalizado)' && (
+            {alunos.length === 0 ? (
+              <View style={styles.card}>
+                <Text style={styles.cardText}>
+                  Você ainda não tem alunos vinculados para montar um treino.
+                </Text>
+              </View>
+            ) : (
               <>
-                <Text style={styles.label}>Nome do Exercício Personalizado:</Text>
+                <Text style={styles.label}>Selecione o Aluno:</Text>
+                <View style={styles.alunoSelectorContainer}>
+                  {alunos.map((aluno) => (
+                    <TouchableOpacity
+                      key={aluno.id_aluno}
+                      style={[
+                        styles.alunoChip,
+                        alunoSelecionadoId === aluno.id_aluno && styles.alunoChipSelected
+                      ]}
+                      onPress={() => selecionarAluno(aluno.id_aluno)}
+                    >
+                      <Text style={[
+                        styles.alunoChipText,
+                        alunoSelecionadoId === aluno.id_aluno && styles.alunoChipTextSelected
+                      ]}>
+                        {aluno.nome}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.label}>Objetivo do Treino</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Ex: Elevação Lateral com Halteres"
+                  placeholder="Ex: Hipertrofia de Membros Superiores"
                   placeholderTextColor="#A0AEC0"
-                  value={nomeOutroExercicio}
-                  onChangeText={setNomeOutroExercicio}
+                  value={objetivoTreino}
+                  onChangeText={setObjetivoTreino}
                 />
+
+                <Text style={styles.label}>Observações (opcional)</Text>
+                <TextInput
+                  style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]}
+                  placeholder="Ex: Treinar 3x por semana, com carga moderada"
+                  placeholderTextColor="#A0AEC0"
+                  value={observacoes}
+                  onChangeText={setObservacoes}
+                  multiline
+                />
+
+                <Text style={styles.label}>Selecione o Exercício:</Text>
+                <View style={styles.pickerContainer}>
+                  {catalogo.map((item) => (
+                    <TouchableOpacity
+                      key={item.id_exercicio}
+                      style={[
+                        styles.exercicioOption,
+                        exercicioId === item.id_exercicio && styles.exercicioSelected,
+                      ]}
+                      onPress={() => setExercicioId(item.id_exercicio)}
+                    >
+                      <Text
+                        style={[
+                          styles.exercicioText,
+                          exercicioId === item.id_exercicio && styles.exercicioTextSelected,
+                        ]}
+                      >
+                        {item.nome}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+
+                  <TouchableOpacity
+                    style={[styles.exercicioOption, exercicioId === 0 && styles.exercicioSelected]}
+                    onPress={() => setExercicioId(0)}
+                  >
+                    <Text style={[styles.exercicioText, exercicioId === 0 && styles.exercicioTextSelected]}>
+                      Outro (Personalizado)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {exercicioId === 0 && (
+                  <>
+                    <Text style={styles.label}>Nome do Exercício Personalizado:</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Ex: Elevação Lateral com Halteres"
+                      placeholderTextColor="#A0AEC0"
+                      value={nomeOutroExercicio}
+                      onChangeText={setNomeOutroExercicio}
+                    />
+                  </>
+                )}
+
+                <View style={styles.rowContainer}>
+                  <View style={styles.column}>
+                    <Text style={styles.label}>Séries</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="3"
+                      keyboardType="numeric"
+                      value={series}
+                      onChangeText={setSeries}
+                    />
+                  </View>
+
+                  <View style={styles.column}>
+                    <Text style={styles.label}>Repetições</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="12"
+                      keyboardType="numeric"
+                      value={repeticoes}
+                      onChangeText={setRepeticoes}
+                    />
+                  </View>
+
+                  <View style={styles.column}>
+                    <Text style={styles.label}>Descanso</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="60s"
+                      value={descanso}
+                      onChangeText={setDescanso}
+                    />
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.buttonAction, adicionando && { opacity: 0.6 }]}
+                  onPress={handleAdicionarExercicio}
+                  disabled={adicionando}
+                >
+                  <Text style={styles.buttonActionText}>
+                    {adicionando ? 'Adicionando...' : '+ Adicionar ao treino'}
+                  </Text>
+                </TouchableOpacity>
+
+                <Text style={[styles.label, { marginTop: 20 }]}>
+                  Exercícios do treino ({itensTreino.length})
+                </Text>
+
+                {itensTreino.length === 0 && (
+                  <Text style={styles.cardText}>Nenhum exercício adicionado ainda.</Text>
+                )}
+
+                {itensTreino.map((item, index) => (
+                  <View key={index} style={styles.itemTreino}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.itemTreinoNome}>{item.nome}</Text>
+                      <Text style={styles.itemTreinoDetalhe}>
+                        {item.series}x{item.repeticoes} · Descanso: {item.descanso}
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => handleRemoverExercicio(index)}>
+                      <Text style={styles.removerTexto}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                <TouchableOpacity
+                  style={[styles.buttonPrimary, salvandoTreino && { opacity: 0.6 }]}
+                  onPress={handleSalvarTreino}
+                  disabled={salvandoTreino}
+                >
+                  <Text style={styles.buttonPrimaryText}>
+                    {salvandoTreino
+                      ? 'Salvando...'
+                      : `Salvar Treino de ${alunoSelecionado?.nome ?? ''}`}
+                  </Text>
+                </TouchableOpacity>
               </>
             )}
-
-            <View style={styles.rowContainer}>
-              <View style={styles.column}>
-                <Text style={styles.label}>Séries</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="3"
-                  keyboardType="numeric"
-                  value={series}
-                  onChangeText={setSeries}
-                />
-              </View>
-
-              <View style={styles.column}>
-                <Text style={styles.label}>Repetições</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="12"
-                  value={repeticoes}
-                  onChangeText={setRepeticoes}
-                />
-              </View>
-
-              <View style={styles.column}>
-                <Text style={styles.label}>Descanso</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="60s"
-                  value={descanso}
-                  onChangeText={setDescanso}
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.buttonPrimary} onPress={handleSalvarTreino}>
-              <Text style={styles.buttonPrimaryText}>Salvar Treino de {alunoSelecionado}</Text>
-            </TouchableOpacity>
           </View>
+
         ) : (
           // aba 3
           <View>
@@ -247,6 +539,7 @@ export default function InicioProfScreen() {
               value={profEmail}
               onChangeText={setProfEmail}
               keyboardType="email-address"
+              autoCapitalize="none"
             />
 
             <Text style={styles.label}>Registro CREF (Comprovação)</Text>
@@ -256,8 +549,14 @@ export default function InicioProfScreen() {
               onChangeText={setProfCref}
             />
 
-            <TouchableOpacity style={styles.buttonPrimary} onPress={handleSalvarPerfil}>
-              <Text style={styles.buttonPrimaryText}>Salvar Alterações do Perfil</Text>
+            <TouchableOpacity
+              style={[styles.buttonPrimary, salvandoPerfil && { opacity: 0.6 }]}
+              onPress={handleSalvarPerfil}
+              disabled={salvandoPerfil}
+            >
+              <Text style={styles.buttonPrimaryText}>
+                {salvandoPerfil ? 'Salvando...' : 'Salvar Alterações do Perfil'}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -302,7 +601,7 @@ export default function InicioProfScreen() {
       </View>
 
       {/* Sair */}
-      <TouchableOpacity style={styles.logoutButton} onPress={() => router.back()}>
+      <TouchableOpacity style={styles.logoutButton} onPress={sair}>
         <Text style={styles.logoutText}>Sair da Conta</Text>
       </TouchableOpacity>
 
@@ -405,6 +704,7 @@ const styles = StyleSheet.create({
   },
   alunoSelectorContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     marginBottom: 10,
   },
   alunoChip: {
@@ -413,6 +713,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 20,
     marginRight: 8,
+    marginBottom: 8,
   },
   alunoChipSelected: {
     backgroundColor: '#D97706',
@@ -467,6 +768,33 @@ const styles = StyleSheet.create({
   column: {
     flex: 1,
     marginHorizontal: 4,
+  },
+  itemTreino: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 12,
+    marginTop: 8,
+  },
+  itemTreinoNome: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  itemTreinoDetalhe: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  removerTexto: {
+    color: '#B91C1C',
+    fontWeight: 'bold',
+    fontSize: 16,
+    paddingHorizontal: 8,
   },
   buttonPrimary: {
     backgroundColor: '#D97706',

@@ -261,7 +261,10 @@ app.get('/dietas/minhas', autenticar, apenas('aluno'), h(async (req, res) => {
 // ---------------------------------------------------------------
 app.get('/professor/alunos', autenticar, apenas('professor'), h(async (req, res) => {
   const r = await pool.query(
-    `SELECT a.id_aluno, a.nome, a.email, v.objetivo, v.criado_em AS vinculado_em
+    `SELECT a.id_aluno, a.nome, a.email, v.objetivo, v.criado_em AS vinculado_em,
+            (SELECT t.objetivo FROM treino t
+              WHERE t.FK_id_aluno = a.id_aluno AND t.FK_id_professor = v.FK_id_professor
+              ORDER BY t.criado_em DESC LIMIT 1) AS treino_atual
      FROM alunoprofessor v JOIN usuarioAluno a ON a.id_aluno = v.FK_id_aluno
      WHERE v.FK_id_professor = $1
      ORDER BY a.nome`,
@@ -426,6 +429,141 @@ app.patch('/aluno/perfil', autenticar, apenas('aluno'), h(async (req, res) => {
   res.json(r.rows[0]);
 }));
 
+// ---------------------------------------------------------------
+// Professor: exercício personalizado e perfil
+// ---------------------------------------------------------------
+app.post('/exercicios', autenticar, apenas('professor'), h(async (req, res) => {
+  const nome = req.body.nome?.trim();
+  if (!nome) return res.status(400).json({ erro: 'Informe o nome do exercício' });
+
+  // Se o exercício já existir, reaproveita o que está no catálogo
+  const r = await pool.query(
+    `INSERT INTO exercicio (nome) VALUES ($1)
+     ON CONFLICT (nome) DO UPDATE SET nome = EXCLUDED.nome
+     RETURNING id_exercicio, nome`,
+    [nome]
+  );
+  res.status(201).json(r.rows[0]);
+}));
+
+app.get('/professor/perfil', autenticar, apenas('professor'), h(async (req, res) => {
+  const r = await pool.query(
+    'SELECT nome, email, CREF AS cref FROM usuarioProfessor WHERE id_professor = $1',
+    [req.user!.id]
+  );
+  res.json(r.rows[0]);
+}));
+
+app.patch('/professor/perfil', autenticar, apenas('professor'), h(async (req, res) => {
+  const { nome, email, cref } = req.body;
+  if (!nome?.trim() || !email?.trim() || !cref?.trim())
+    return res.status(400).json({ erro: 'Nome, e-mail e CREF são obrigatórios' });
+
+  const emailNovo = email.trim().toLowerCase();
+
+  const emUso = await pool.query(
+    `SELECT 1 FROM usuarioAluno WHERE email = $1
+     UNION ALL SELECT 1 FROM usuarioProfessor WHERE email = $1 AND id_professor <> $2
+     UNION ALL SELECT 1 FROM usuarioNutri WHERE email = $1`,
+    [emailNovo, req.user!.id]
+  );
+  if (emUso.rowCount) return res.status(409).json({ erro: 'E-mail já cadastrado' });
+
+  const r = await pool.query(
+    `UPDATE usuarioProfessor SET nome = $1, email = $2, CREF = $3 WHERE id_professor = $4
+     RETURNING nome, email, CREF AS cref`,
+    [nome.trim(), emailNovo, cref.trim(), req.user!.id]
+  );
+  res.json(r.rows[0]);
+}));
+
+// ---------------------------------------------------------------
+// Profissional cadastra um aluno (cria a conta, se precisar) e vincula
+// ---------------------------------------------------------------
+app.post('/alunos/cadastrar', autenticar, h(async (req, res) => {
+  const papel = req.user!.papel;
+  if (papel !== 'professor' && papel !== 'nutricionista')
+    return res.status(403).json({ erro: 'Acesso negado para este perfil' });
+
+  const { nome, email, senha, objetivo } = req.body;
+  const emailNorm = email?.trim().toLowerCase();
+  if (!emailNorm) return res.status(400).json({ erro: 'Informe o e-mail do aluno' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let idAluno: number;
+    let nomeAluno: string;
+    let jaExistia = false;
+
+    const existente = await client.query(
+      'SELECT id_aluno, nome FROM usuarioAluno WHERE email = $1', [emailNorm]
+    );
+
+    if (existente.rowCount) {
+      // O aluno já tem conta: só vincula
+      idAluno = existente.rows[0].id_aluno;
+      nomeAluno = existente.rows[0].nome;
+      jaExistia = true;
+    } else {
+      // O e-mail não pode ser de um professor ou nutricionista
+      const outro = await client.query(
+        `SELECT 1 FROM usuarioProfessor WHERE email = $1
+         UNION ALL SELECT 1 FROM usuarioNutri WHERE email = $1`,
+        [emailNorm]
+      );
+      if (outro.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ erro: 'Este e-mail já pertence a outro tipo de conta' });
+      }
+      if (!nome?.trim() || !senha) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ erro: 'Informe o nome e a senha inicial para criar a conta do aluno' });
+      }
+
+      const hash = await bcrypt.hash(senha, 10);
+      const novo = await client.query(
+        'INSERT INTO usuarioAluno (nome, email, senha) VALUES ($1,$2,$3) RETURNING id_aluno',
+        [nome.trim(), emailNorm, hash]
+      );
+      idAluno = novo.rows[0].id_aluno;
+      nomeAluno = nome.trim();
+    }
+
+    const [tabela, colunaProfissional] =
+      papel === 'professor'
+        ? ['alunoprofessor', 'FK_id_professor']
+        : ['alunonutricionista', 'FK_id_nutricionista'];
+
+    const vinculo = await client.query(
+      `INSERT INTO ${tabela} (objetivo, FK_id_aluno, ${colunaProfissional})
+       VALUES ($1,$2,$3)
+       ON CONFLICT (FK_id_aluno, ${colunaProfissional}) DO NOTHING
+       RETURNING id_vinculo`,
+      [objetivo?.trim() || null, idAluno, req.user!.id]
+    );
+    if (!vinculo.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ erro: 'Este aluno já está vinculado a você' });
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({
+      jaExistia,
+      aluno: { id_aluno: idAluno, nome: nomeAluno },
+      mensagem: jaExistia
+        ? `${nomeAluno} já tinha conta e agora está vinculado(a) à sua lista.`
+        : `Aluno(a) ${nomeAluno} cadastrado(a) e vinculado(a) à sua lista! Informe a senha inicial a ele(a).`,
+    });
+  } catch (e: any) {
+    await client.query('ROLLBACK');
+    if (e.code === '23505') return res.status(409).json({ erro: 'E-mail já cadastrado' });
+    throw e;
+  } finally {
+    client.release();
+  }
+}));
 // ---------------------------------------------------------------
 // Tratamento de erros e inicialização
 // ---------------------------------------------------------------

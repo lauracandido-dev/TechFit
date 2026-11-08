@@ -336,7 +336,10 @@ app.post('/treinos', autenticar, apenas('professor'), h(async (req, res) => {
 // ---------------------------------------------------------------
 app.get('/nutri/alunos', autenticar, apenas('nutricionista'), h(async (req, res) => {
   const r = await pool.query(
-    `SELECT a.id_aluno, a.nome, a.email, v.objetivo, v.criado_em AS vinculado_em
+    `SELECT a.id_aluno, a.nome, a.email, v.objetivo, v.criado_em AS vinculado_em,
+            (SELECT d.objetivo FROM dieta d
+              WHERE d.FK_id_aluno = a.id_aluno AND d.FK_id_nutricionista = v.FK_id_nutricionista
+              ORDER BY d.criado_em DESC LIMIT 1) AS dieta_atual
      FROM alunonutricionista v JOIN usuarioAluno a ON a.id_aluno = v.FK_id_aluno
      WHERE v.FK_id_nutricionista = $1
      ORDER BY a.nome`,
@@ -564,6 +567,41 @@ app.post('/alunos/cadastrar', autenticar, h(async (req, res) => {
     client.release();
   }
 }));
+
+// ---------------------------------------------------------------
+// Nutricionista: perfil
+// ---------------------------------------------------------------
+app.get('/nutri/perfil', autenticar, apenas('nutricionista'), h(async (req, res) => {
+  const r = await pool.query(
+    'SELECT nome, email, CRN AS crn FROM usuarioNutri WHERE id_nutricionista = $1',
+    [req.user!.id]
+  );
+  res.json(r.rows[0]);
+}));
+
+app.patch('/nutri/perfil', autenticar, apenas('nutricionista'), h(async (req, res) => {
+  const { nome, email, crn } = req.body;
+  if (!nome?.trim() || !email?.trim() || !crn?.trim())
+    return res.status(400).json({ erro: 'Nome, e-mail e CRN são obrigatórios' });
+
+  const emailNovo = email.trim().toLowerCase();
+
+  const emUso = await pool.query(
+    `SELECT 1 FROM usuarioAluno WHERE email = $1
+     UNION ALL SELECT 1 FROM usuarioProfessor WHERE email = $1
+     UNION ALL SELECT 1 FROM usuarioNutri WHERE email = $1 AND id_nutricionista <> $2`,
+    [emailNovo, req.user!.id]
+  );
+  if (emUso.rowCount) return res.status(409).json({ erro: 'E-mail já cadastrado' });
+
+  const r = await pool.query(
+    `UPDATE usuarioNutri SET nome = $1, email = $2, CRN = $3 WHERE id_nutricionista = $4
+     RETURNING nome, email, CRN AS crn`,
+    [nome.trim(), emailNovo, crn.trim(), req.user!.id]
+  );
+  res.json(r.rows[0]);
+}));
+
 // ---------------------------------------------------------------
 // Tratamento de erros e inicialização
 // ---------------------------------------------------------------

@@ -845,8 +845,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   logoutText: {
-    fontSize: 12,
-    color: '#9CA3AF',
+    fontSize: 15,
+    color: '#DC2626',
+    fontWeight: 'bold',
     textDecorationLine: 'underline',
   },
 });

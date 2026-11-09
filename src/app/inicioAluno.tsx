@@ -1,4 +1,6 @@
 import { useRouter } from 'expo-router';
+import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video'; // NOVO: player de vídeo
+import { WebView } from 'react-native-webview'; // NOVO: usado para o player do YouTube
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -8,10 +10,16 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Vibration, // NOVO: atuador (vibração do celular)
   View,
 } from 'react-native';
 import { api, avisar } from '../services/api';
 import { getSessao, limparSessao, salvarSessao } from '../services/sessao';
+
+// ---------- Padrões de vibração (atuador) ----------
+// Pattern: [espera, vibra, espera, vibra...] em milissegundos
+const VIBRACAO_INSCRICAO = [0, 200, 100, 200]; // duas vibradas curtas = "confirmado"
+const VIBRACAO_CANCELAMENTO = 400;             // uma vibrada longa
 
 // ---------- Tipos do que a API devolve ----------
 interface AulaApi {
@@ -33,6 +41,7 @@ interface ExercicioApi {
   series: number;
   repeticoes: number;
   descanso: string;
+  gif_url: string | null; // NOVO: link do vídeo do exercício (pode ser nulo)
 }
 interface TreinoApi {
   id_treino: number;
@@ -86,6 +95,55 @@ function separarRefeicoes(texto: string) {
         ? { refeicao: linha.slice(0, i).trim(), itens: linha.slice(i + 1).trim() }
         : { refeicao: '', itens: linha };
     });
+}
+
+// NOVO: tira o ID do vídeo de um link do YouTube.
+// Funciona com youtu.be/ID, youtube.com/watch?v=ID, /embed/ID e /shorts/ID.
+// Se o link não for do YouTube, devolve null.
+function extrairIdYoutube(url: string): string | null {
+  const m = url.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+// NOVO: player para arquivo de vídeo direto (.mp4).
+// Precisa ser um componente separado porque useVideoPlayer é um hook,
+// e hooks não podem ser chamados dentro de um .map() nem dentro de um if.
+function VideoMp4({ url }: { url: string }) {
+  const player = useVideoPlayer(url, (p: VideoPlayer) => {
+    p.loop = true; // repete o vídeo em loop
+  });
+
+  return (
+    <VideoView
+      player={player}
+      style={styles.videoExercicio}
+      nativeControls       // mostra os controles de play/pause
+      contentFit="contain" // não corta o vídeo
+    />
+  );
+}
+
+// NOVO: escolhe o player certo conforme o link guardado em gif_url.
+// - link do YouTube -> player embutido do YouTube (WebView)
+// - qualquer outro  -> arquivo de vídeo (.mp4) com expo-video
+function VideoExercicio({ url }: { url: string }) {
+  const idYoutube = extrairIdYoutube(url);
+
+  if (idYoutube) {
+    return (
+      <View style={styles.videoExercicio}>
+        <WebView
+          source={{ uri: `https://www.youtube.com/embed/${idYoutube}?playsinline=1&rel=0` }}
+          style={{ flex: 1 }}
+          javaScriptEnabled
+          allowsFullscreenVideo
+          allowsInlineMediaPlayback
+        />
+      </View>
+    );
+  }
+
+  return <VideoMp4 url={url} />;
 }
 
 export default function InicioAlunoScreen() {
@@ -205,9 +263,11 @@ export default function InicioAlunoScreen() {
     try {
       if (idReserva) {
         await api(`/reservas/${idReserva}/cancelar`, { method: 'PATCH' }, token);
+        Vibration.vibrate(VIBRACAO_CANCELAMENTO); // NOVO: vibra ao cancelar
         avisar('Inscrição Cancelada', `Você saiu da aula de ${aula.nome}.`);
       } else {
         await api('/reservas', { method: 'POST', body: JSON.stringify({ id_aula: aula.id_aula }) }, token);
+        Vibration.vibrate(VIBRACAO_INSCRICAO); // NOVO: vibra ao se inscrever
         avisar('Sucesso!', `Você garantiu sua vaga na aula de ${aula.nome}!`);
       }
       await carregarAulas();
@@ -271,6 +331,11 @@ export default function InicioAlunoScreen() {
                 {treino.exercicios.map((item) => (
                   <View key={item.id_exercicio} style={styles.cardTreino}>
                     <Text style={styles.cardTitleTreino}>{item.nome}</Text>
+
+                    {/* NOVO: vídeo entre o nome e as séries.
+                        Só aparece se o exercício tiver URL cadastrada no banco (gif_url). */}
+                    {!!item.gif_url && <VideoExercicio url={item.gif_url} />}
+
                     <View style={styles.detalhesTreinoRow}>
                       <Text style={styles.badgeText}>Séries: {item.series}</Text>
                       <Text style={styles.badgeText}>Repetições: {item.repeticoes}</Text>
@@ -504,16 +569,17 @@ const styles = StyleSheet.create({
     color: '#DBEAFE',
     marginTop: 2,
   },
+  
   headerSair: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    paddingHorizontal: 18,
     borderRadius: 8,
   },
   headerSairText: {
-    color: '#FFFFFF',
+    color: '#DC2626',
     fontWeight: 'bold',
-    fontSize: 13,
+    fontSize: 14,
   },
   contentContainer: {
     padding: 20,
@@ -580,6 +646,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
     marginBottom: 6,
+  },
+
+  videoExercicio: {
+    width: '100%',
+    aspectRatio: 16 / 9, 
+    borderRadius: 8,
+    backgroundColor: '#000',
+    marginVertical: 10,
+    overflow: 'hidden', 
   },
   detalhesTreinoRow: {
     flexDirection: 'row',

@@ -807,9 +807,10 @@ const styles = StyleSheet.create({
     bottom: 10,
     alignSelf: 'center',
   },
-  logoutText: {
-    fontSize: 12,
-    color: '#9CA3AF',
+ logoutText: {
+    fontSize: 15,
+    color: '#DC2626',
+    fontWeight: 'bold',
     textDecorationLine: 'underline',
   },
 });

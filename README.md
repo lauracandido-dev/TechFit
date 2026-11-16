@@ -74,7 +74,7 @@ O projeto permitiu aplicar conhecimentos de desenvolvimento mobile, organizaçã
 - Leonardo Henrique Vieira Bardini
 - Guilherme Proença
 
-**Professora:** Renata M. Nogueira de Oliveira
+**Professor:** Vinicius Vono Peruzzi
 
 ---
 

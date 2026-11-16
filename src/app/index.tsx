@@ -39,7 +39,7 @@ export default function LoginScreen() {
   // Armazena o e-mail, a senha e o perfil selecionado
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
-  const [perfil, setPerfil] = useState('Aluno');//começa no aluno, padrão
+  const [perfil, setPerfil] = useState('Aluno'); // começa no aluno, padrão
   const [carregando, setCarregando] = useState(false);
 
   const handleLogin = async () => {
@@ -75,7 +75,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      /* Ajusta a tela conforme o teclado aparece */
+      {/* Ajusta a tela conforme o teclado aparece */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.innerContainer}
@@ -85,10 +85,9 @@ export default function LoginScreen() {
           <Text style={styles.subtitleText}>Gestão para Academias</Text>
         </View>
 
-        /* forms */
+        {/* forms */}
         <View style={styles.formContainer}>
-
-          /* email */
+          {/* email */}
           <Text style={styles.label}>E-mail</Text>
           <TextInput
             style={styles.input}
@@ -100,7 +99,7 @@ export default function LoginScreen() {
             onChangeText={setEmail}
           />
 
-          /* senha */
+          {/* senha */}
           <Text style={styles.label}>Senha</Text>
           <TextInput
             style={styles.input}
@@ -111,10 +110,10 @@ export default function LoginScreen() {
             onChangeText={setSenha}
           />
 
-          /* selecionar se é alu, prof ou nutri */
+          {/* selecionar se é alu, prof ou nutri */}
           <Text style={styles.label}>Você é:</Text>
 
-          /* Opções para selecionar o tipo de usuário */
+          {/* Opções para selecionar o tipo de usuário */}
           <View style={styles.dropdownContainer}>
             <TouchableOpacity
               style={[styles.dropdownOption, perfil === 'Aluno' && styles.optionSelected]}
@@ -144,7 +143,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          /* botao entrar */
+          {/* botao entrar */}
           <TouchableOpacity
             style={[styles.buttonPrimary, carregando && styles.buttonDisabled]}
             onPress={handleLogin}
@@ -155,7 +154,7 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
 
-          /* botao cadastro */  
+          {/* botao cadastro */}
           <View style={styles.signupSection}>
             <Text style={styles.signupText}>Ainda não tem conta?</Text>
 

@@ -317,7 +317,7 @@ export default function InicioAlunoScreen() {
 
         ) : abaAtiva === 'inicio' ? (
           <View>
-            /* Tela inicial com o resumo da conta */
+           { /* Tela inicial com o resumo da conta */}
             <Text style={styles.sectionTitle}>Resumo da sua Conta</Text>
 
             <View style={styles.card}>

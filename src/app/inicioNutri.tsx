@@ -27,9 +27,33 @@ interface PerfilApi {
   email: string;
   crn: string;
 }
+interface DietaApi {
+  id_dieta: number;
+  objetivo: string;
+  observacoes: string;
+  alimentacao: string;
+}
 interface Refeicao {
   titulo: string;
   itens: string[];
+}
+
+// No banco a dieta é um texto só, uma refeição por linha: "Café da Manhã: 2 ovos + 1 pão".
+// Esta função faz o caminho de volta, para a dieta poder ser editada.
+function separarRefeicoes(texto: string): Refeicao[] {
+  return texto
+    .split('\n')
+    .map((linha) => linha.trim())
+    .filter(Boolean)
+    .map((linha) => {
+      const i = linha.indexOf(':');
+      const titulo = i > 0 && i < 40 ? linha.slice(0, i).trim() : 'Refeição';
+      const resto = i > 0 && i < 40 ? linha.slice(i + 1) : linha;
+      return {
+        titulo,
+        itens: resto.split(' + ').map((item) => item.trim()).filter(Boolean),
+      };
+    });
 }
 
 export default function InicioNutriScreen() {
@@ -50,8 +74,10 @@ export default function InicioNutriScreen() {
   const [nutriCrn, setNutriCrn] = useState('');
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
 
-  // montagem da dieta
+  // montagem / edição da dieta
   const [alunoSelecionadoId, setAlunoSelecionadoId] = useState<number | null>(null);
+  const [dietaId, setDietaId] = useState<number | null>(null); // preenchido quando já existe dieta (edição)
+  const [carregandoDieta, setCarregandoDieta] = useState(false);
   const [objetivoDieta, setObjetivoDieta] = useState('');
   const [observacoesDieta, setObservacoesDieta] = useState('');
 
@@ -87,6 +113,30 @@ export default function InicioNutriScreen() {
     return lista;
   };
 
+  // Seleciona o aluno e carrega a dieta atual dele no formulário (ou deixa em branco)
+  const abrirDietaDoAluno = async (id: number) => {
+    setAlunoSelecionadoId(id);
+    setCarregandoDieta(true);
+    try {
+      const { dieta } = await api<{ dieta: DietaApi | null }>(
+        `/nutri/alunos/${id}/dieta`,
+        {},
+        token
+      );
+      setDietaId(dieta?.id_dieta ?? null);
+      setObjetivoDieta(dieta?.objetivo ?? '');
+      setObservacoesDieta(dieta?.observacoes ?? '');
+      setRefeicoes(dieta ? separarRefeicoes(dieta.alimentacao) : []);
+      setTituloRefeicao('');
+      setItemAlimento('');
+      setListaItens([]);
+    } catch (e: any) {
+      tratarErro(e);
+    } finally {
+      setCarregandoDieta(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) {
       router.replace('/');
@@ -99,10 +149,10 @@ export default function InicioNutriScreen() {
           carregarAlunos(),
           api<PerfilApi>('/nutri/perfil', {}, token),
         ]);
-        setAlunoSelecionadoId(listaAlunos[0]?.id_aluno ?? null);
         setNutriNome(perfil.nome);
         setNutriEmail(perfil.email);
         setNutriCrn(perfil.crn);
+        if (listaAlunos[0]) await abrirDietaDoAluno(listaAlunos[0].id_aluno);
       } catch (e: any) {
         tratarErro(e);
       } finally {
@@ -156,22 +206,9 @@ export default function InicioNutriScreen() {
     }
   };
 
-  // Trocar de aluno começa uma dieta nova (evita enviar a dieta para o aluno errado)
-  const selecionarAluno = (id: number) => {
-    if (id !== alunoSelecionadoId) {
-      setRefeicoes([]);
-      setObjetivoDieta('');
-      setObservacoesDieta('');
-      setTituloRefeicao('');
-      setItemAlimento('');
-      setListaItens([]);
-    }
-    setAlunoSelecionadoId(id);
-  };
-
-  const handleEditarDietaAluno = (id: number) => {
-    selecionarAluno(id);
+  const handleEditarDietaAluno = async (id: number) => {
     setAbaAtiva('dietas');
+    await abrirDietaDoAluno(id);
   };
 
   // adicionar alimento à refeição em montagem
@@ -205,8 +242,33 @@ export default function InicioNutriScreen() {
     setListaItens([]);
   };
 
+  // Devolve a refeição ao formulário para alterar o título ou os itens
+  const handleEditarRefeicao = (index: number) => {
+    if (tituloRefeicao.trim() || listaItens.length > 0) {
+      avisar('Atenção', 'Termine ou limpe a refeição em andamento antes de editar outra.');
+      return;
+    }
+    const refeicao = refeicoes[index];
+    setTituloRefeicao(refeicao.titulo);
+    setListaItens(refeicao.itens);
+    setRefeicoes(refeicoes.filter((_, i) => i !== index));
+  };
+
   const handleRemoverRefeicao = (indexParaRemover: number) => {
     setRefeicoes(refeicoes.filter((_, index) => index !== indexParaRemover));
+  };
+
+  // Remove um alimento de uma refeição já adicionada (se ficar vazia, a refeição some)
+  const handleRemoverItemDaRefeicao = (indexRefeicao: number, indexItem: number) => {
+    setRefeicoes(
+      refeicoes
+        .map((refeicao, i) =>
+          i === indexRefeicao
+            ? { ...refeicao, itens: refeicao.itens.filter((_, j) => j !== indexItem) }
+            : refeicao
+        )
+        .filter((refeicao) => refeicao.itens.length > 0)
+    );
   };
 
   const handleSalvarDieta = async () => {
@@ -240,30 +302,30 @@ export default function InicioNutriScreen() {
       .map((r) => `${r.titulo}: ${r.itens.join(' + ')}`)
       .join('\n');
 
+    const corpo = {
+      objetivo: objetivoDieta.trim(),
+      observacoes: observacoesDieta.trim(),
+      alimentacao,
+    };
+
     setSalvandoDieta(true);
     try {
-      await api(
-        '/dietas',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            id_aluno: alunoSelecionado.id_aluno,
-            objetivo: objetivoDieta.trim(),
-            observacoes: observacoesDieta.trim(),
-            alimentacao,
-          }),
-        },
-        token
-      );
+      if (dietaId) {
+        // já existe: atualiza a mesma dieta
+        await api(`/dietas/${dietaId}`, { method: 'PUT', body: JSON.stringify(corpo) }, token);
+        avisar('Sucesso!', `Dieta de ${alunoSelecionado.nome} atualizada!`);
+      } else {
+        // ainda não existe: cria
+        await api(
+          '/dietas',
+          { method: 'POST', body: JSON.stringify({ ...corpo, id_aluno: alunoSelecionado.id_aluno }) },
+          token
+        );
+        avisar('Sucesso!', `Dieta de ${alunoSelecionado.nome} criada com ${refeicoesFinais.length} refeição(ões)!`);
+      }
 
-      avisar('Sucesso!', `Dieta de ${alunoSelecionado.nome} salva com ${refeicoesFinais.length} refeição(ões)!`);
-      setRefeicoes([]);
-      setObjetivoDieta('');
-      setObservacoesDieta('');
-      setTituloRefeicao('');
-      setItemAlimento('');
-      setListaItens([]);
-      await carregarAlunos();
+      // Recarrega do banco para mostrar exatamente o que ficou salvo
+      await Promise.all([abrirDietaDoAluno(alunoSelecionado.id_aluno), carregarAlunos()]);
     } catch (e: any) {
       tratarErro(e);
     } finally {
@@ -350,7 +412,7 @@ export default function InicioNutriScreen() {
                         styles.alunoChip,
                         alunoSelecionadoId === aluno.id_aluno && styles.alunoChipSelected
                       ]}
-                      onPress={() => selecionarAluno(aluno.id_aluno)}
+                      onPress={() => abrirDietaDoAluno(aluno.id_aluno)}
                     >
                       <Text style={[
                         styles.alunoChipText,
@@ -362,100 +424,129 @@ export default function InicioNutriScreen() {
                   ))}
                 </View>
 
-                <Text style={styles.label}>Objetivo da Dieta</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex: Ganho de massa magra"
-                  placeholderTextColor="#A0AEC0"
-                  value={objetivoDieta}
-                  onChangeText={setObjetivoDieta}
-                />
+                {carregandoDieta ? (
+                  <ActivityIndicator size="small" color="#059669" style={{ marginVertical: 30 }} />
+                ) : (
+                  <>
+                    <View style={styles.avisoEdicao}>
+                      <Text style={styles.avisoEdicaoTexto}>
+                        {dietaId
+                          ? `✏️ Editando a dieta atual de ${alunoSelecionado?.nome ?? ''}. Altere, remova ou adicione refeições e alimentos e salve.`
+                          : `🆕 Nova dieta para ${alunoSelecionado?.nome ?? ''}.`}
+                      </Text>
+                    </View>
 
-                <Text style={styles.label}>Título da Refeição (Ex: Café da Manhã)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex: Café da Manhã"
-                  placeholderTextColor="#A0AEC0"
-                  value={tituloRefeicao}
-                  onChangeText={setTituloRefeicao}
-                />
+                    <Text style={styles.label}>Objetivo da Dieta</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Ex: Ganho de massa magra"
+                      placeholderTextColor="#A0AEC0"
+                      value={objetivoDieta}
+                      onChangeText={setObjetivoDieta}
+                    />
 
-                {/* adicionar alimento */}
-                <Text style={styles.label}>Adicionar Alimento / Item:</Text>
-                <View style={styles.addItemRow}>
-                  <TextInput
-                    style={styles.inputFino}
-                    placeholder="Ex: 2 fatias de pão integral"
-                    placeholderTextColor="#A0AEC0"
-                    value={itemAlimento}
-                    onChangeText={setItemAlimento}
-                  />
-                  <TouchableOpacity style={styles.btnAddItem} onPress={handleAdicionarItem}>
-                    <Text style={styles.btnAddItemText}>+ Adicionar</Text>
-                  </TouchableOpacity>
-                </View>
+                    {/* refeições já adicionadas */}
+                    <Text style={[styles.label, { marginTop: 20 }]}>
+                      Refeições da dieta ({refeicoes.length})
+                    </Text>
 
-                {/* lista de itens */}
-                {listaItens.length > 0 && (
-                  <View style={styles.listaItensContainer}>
-                    <Text style={styles.listaItensTitulo}>Itens da Refeição:</Text>
-                    {listaItens.map((item, index) => (
-                      <View key={index} style={styles.itemRowCard}>
-                        <Text style={styles.itemRowText}>{item}</Text>
-                        <TouchableOpacity onPress={() => handleRemoverItem(index)}>
-                          <Text style={styles.itemRemoveText}>❌</Text>
-                        </TouchableOpacity>
+                    {refeicoes.length === 0 && (
+                      <Text style={styles.cardText}>Nenhuma refeição na dieta ainda.</Text>
+                    )}
+
+                    {refeicoes.map((refeicao, indexRefeicao) => (
+                      <View key={indexRefeicao} style={styles.refeicaoCard}>
+                        <View style={styles.refeicaoHeader}>
+                          <Text style={styles.refeicaoTitulo}>{refeicao.titulo}</Text>
+                          <View style={{ flexDirection: 'row' }}>
+                            <TouchableOpacity onPress={() => handleEditarRefeicao(indexRefeicao)}>
+                              <Text style={styles.acaoTexto}>Editar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleRemoverRefeicao(indexRefeicao)}>
+                              <Text style={styles.acaoRemover}>Remover</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {refeicao.itens.map((item, indexItem) => (
+                          <View key={indexItem} style={styles.refeicaoItemRow}>
+                            <Text style={styles.refeicaoItemTexto}>{item}</Text>
+                            <TouchableOpacity onPress={() => handleRemoverItemDaRefeicao(indexRefeicao, indexItem)}>
+                              <Text style={styles.itemRemoveText}>❌</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
                       </View>
                     ))}
-                  </View>
-                )}
 
-                <TouchableOpacity style={styles.buttonAction} onPress={handleAdicionarRefeicao}>
-                  <Text style={styles.buttonActionText}>+ Adicionar refeição à dieta</Text>
-                </TouchableOpacity>
+                    <Text style={[styles.label, { marginTop: 24 }]}>Título da Refeição (Ex: Café da Manhã)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Ex: Café da Manhã"
+                      placeholderTextColor="#A0AEC0"
+                      value={tituloRefeicao}
+                      onChangeText={setTituloRefeicao}
+                    />
 
-                {/* refeições já adicionadas */}
-                <Text style={[styles.label, { marginTop: 20 }]}>
-                  Refeições da dieta ({refeicoes.length})
-                </Text>
-
-                {refeicoes.length === 0 && (
-                  <Text style={styles.cardText}>Nenhuma refeição adicionada ainda.</Text>
-                )}
-
-                {refeicoes.map((refeicao, index) => (
-                  <View key={index} style={styles.refeicaoCard}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.refeicaoTitulo}>{refeicao.titulo}</Text>
-                      <Text style={styles.refeicaoItens}>{refeicao.itens.join(' + ')}</Text>
+                    {/* adicionar alimento */}
+                    <Text style={styles.label}>Adicionar Alimento / Item:</Text>
+                    <View style={styles.addItemRow}>
+                      <TextInput
+                        style={styles.inputFino}
+                        placeholder="Ex: 2 fatias de pão integral"
+                        placeholderTextColor="#A0AEC0"
+                        value={itemAlimento}
+                        onChangeText={setItemAlimento}
+                      />
+                      <TouchableOpacity style={styles.btnAddItem} onPress={handleAdicionarItem}>
+                        <Text style={styles.btnAddItemText}>+ Adicionar</Text>
+                      </TouchableOpacity>
                     </View>
-                    <TouchableOpacity onPress={() => handleRemoverRefeicao(index)}>
-                      <Text style={styles.itemRemoveText}>❌</Text>
+
+                    {/* lista de itens */}
+                    {listaItens.length > 0 && (
+                      <View style={styles.listaItensContainer}>
+                        <Text style={styles.listaItensTitulo}>Itens da Refeição:</Text>
+                        {listaItens.map((item, index) => (
+                          <View key={index} style={styles.itemRowCard}>
+                            <Text style={styles.itemRowText}>{item}</Text>
+                            <TouchableOpacity onPress={() => handleRemoverItem(index)}>
+                              <Text style={styles.itemRemoveText}>❌</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    <TouchableOpacity style={styles.buttonAction} onPress={handleAdicionarRefeicao}>
+                      <Text style={styles.buttonActionText}>+ Adicionar refeição à dieta</Text>
                     </TouchableOpacity>
-                  </View>
-                ))}
 
-                <Text style={styles.label}>Orientações Nutricionais / Observações</Text>
-                <TextInput
-                  style={[styles.input, { height: 70, textAlignVertical: 'top' }]}
-                  placeholder="Ex: Beber água, substituir se necessário..."
-                  placeholderTextColor="#A0AEC0"
-                  multiline
-                  value={observacoesDieta}
-                  onChangeText={setObservacoesDieta}
-                />
+                    <Text style={styles.label}>Orientações Nutricionais / Observações</Text>
+                    <TextInput
+                      style={[styles.input, { height: 70, textAlignVertical: 'top' }]}
+                      placeholder="Ex: Beber água, substituir se necessário..."
+                      placeholderTextColor="#A0AEC0"
+                      multiline
+                      value={observacoesDieta}
+                      onChangeText={setObservacoesDieta}
+                    />
 
-                <TouchableOpacity
-                  style={[styles.buttonPrimary, salvandoDieta && { opacity: 0.6 }]}
-                  onPress={handleSalvarDieta}
-                  disabled={salvandoDieta}
-                >
-                  <Text style={styles.buttonPrimaryText}>
-                    {salvandoDieta
-                      ? 'Salvando...'
-                      : `Salvar Dieta de ${alunoSelecionado?.nome ?? ''}`}
-                  </Text>
-                </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.buttonPrimary, salvandoDieta && { opacity: 0.6 }]}
+                      onPress={handleSalvarDieta}
+                      disabled={salvandoDieta}
+                    >
+                      <Text style={styles.buttonPrimaryText}>
+                        {salvandoDieta
+                          ? 'Salvando...'
+                          : dietaId
+                            ? `Atualizar Dieta de ${alunoSelecionado?.nome ?? ''}`
+                            : `Salvar Dieta de ${alunoSelecionado?.nome ?? ''}`}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </>
             )}
           </View>
@@ -634,6 +725,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 15,
   },
+  avisoEdicao: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 6,
+  },
+  avisoEdicaoTexto: {
+    fontSize: 13,
+    color: '#065F46',
+    lineHeight: 18,
+  },
   label: {
     fontSize: 14,
     fontWeight: '600',
@@ -739,9 +843,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   refeicaoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
     borderWidth: 1,
@@ -749,15 +850,43 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 8,
   },
+  refeicaoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
   refeicaoTitulo: {
     fontSize: 14,
     fontWeight: 'bold',
     color: '#059669',
+    flex: 1,
   },
-  refeicaoItens: {
+  acaoTexto: {
+    color: '#047857',
+    fontWeight: 'bold',
     fontSize: 12,
-    color: '#4B5563',
-    marginTop: 2,
+    marginLeft: 12,
+  },
+  acaoRemover: {
+    color: '#B91C1C',
+    fontWeight: 'bold',
+    fontSize: 12,
+    marginLeft: 12,
+  },
+  refeicaoItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  refeicaoItemTexto: {
+    fontSize: 13,
+    color: '#374151',
+    flex: 1,
+    marginRight: 8,
   },
   buttonPrimary: {
     backgroundColor: '#059669',
@@ -807,10 +936,9 @@ const styles = StyleSheet.create({
     bottom: 10,
     alignSelf: 'center',
   },
- logoutText: {
-    fontSize: 15,
-    color: '#DC2626',
-    fontWeight: 'bold',
+  logoutText: {
+    fontSize: 12,
+    color: '#9CA3AF',
     textDecorationLine: 'underline',
   },
 });

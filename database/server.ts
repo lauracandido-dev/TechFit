@@ -332,6 +332,75 @@ app.post('/treinos', autenticar, apenas('professor'), h(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------
+// Professor: abrir o treino atual de um aluno e atualizá-lo
+// ---------------------------------------------------------------
+app.get('/professor/alunos/:id/treino', autenticar, apenas('professor'), h(async (req, res) => {
+  const r = await pool.query(
+    `SELECT t.id_treino, t.objetivo, t.observacoes,
+            COALESCE(
+              json_agg(json_build_object(
+                'id_exercicio', e.id_exercicio,
+                'nome', e.nome,
+                'series', te.series,
+                'repeticoes', te.repeticoes,
+                'descanso', te.descanso
+              ) ORDER BY te.id_treino_exercicio) FILTER (WHERE e.id_exercicio IS NOT NULL),
+              '[]'
+            ) AS exercicios
+     FROM treino t
+     LEFT JOIN treinoexercicio te ON te.FK_id_treino = t.id_treino
+     LEFT JOIN exercicio e ON e.id_exercicio = te.FK_id_exercicio
+     WHERE t.FK_id_aluno = $1 AND t.FK_id_professor = $2
+     GROUP BY t.id_treino
+     ORDER BY t.criado_em DESC
+     LIMIT 1`,
+    [req.params.id, req.user!.id]
+  );
+  res.json({ treino: r.rows[0] ?? null });
+}));
+
+app.put('/treinos/:id', autenticar, apenas('professor'), h(async (req, res) => {
+  const { objetivo, observacoes, exercicios } = req.body;
+  if (!objetivo?.trim() || !Array.isArray(exercicios) || !exercicios.length)
+    return res.status(400).json({ erro: 'Informe o objetivo e ao menos um exercício' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Só o professor dono do treino consegue alterá-lo
+    const upd = await client.query(
+      `UPDATE treino SET objetivo = $1, observacoes = $2, atualizado_em = NOW()
+       WHERE id_treino = $3 AND FK_id_professor = $4
+       RETURNING id_treino`,
+      [objetivo.trim(), observacoes || '', req.params.id, req.user!.id]
+    );
+    if (!upd.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ erro: 'Treino não encontrado' });
+    }
+
+    // Troca a lista de exercícios: apaga a antiga e grava a nova
+    await client.query('DELETE FROM treinoexercicio WHERE FK_id_treino = $1', [req.params.id]);
+    for (const ex of exercicios) {
+      await client.query(
+        `INSERT INTO treinoexercicio (series, repeticoes, descanso, FK_id_treino, FK_id_exercicio)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [ex.series, ex.repeticoes, ex.descanso, req.params.id, ex.id_exercicio]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ id_treino: Number(req.params.id) });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}));
+
+// ---------------------------------------------------------------
 // Nutricionista
 // ---------------------------------------------------------------
 app.get('/nutri/alunos', autenticar, apenas('nutricionista'), h(async (req, res) => {
@@ -384,6 +453,36 @@ app.post('/dietas', autenticar, apenas('nutricionista'), h(async (req, res) => {
   res.status(201).json(r.rows[0]);
 }));
 
+// ---------------------------------------------------------------
+// Nutricionista: abrir a dieta atual de um aluno e atualizá-la
+// ---------------------------------------------------------------
+app.get('/nutri/alunos/:id/dieta', autenticar, apenas('nutricionista'), h(async (req, res) => {
+  const r = await pool.query(
+    `SELECT id_dieta, objetivo, observacoes, alimentacao
+     FROM dieta
+     WHERE FK_id_aluno = $1 AND FK_id_nutricionista = $2
+     ORDER BY criado_em DESC
+     LIMIT 1`,
+    [req.params.id, req.user!.id]
+  );
+  res.json({ dieta: r.rows[0] ?? null });
+}));
+
+app.put('/dietas/:id', autenticar, apenas('nutricionista'), h(async (req, res) => {
+  const { objetivo, observacoes, alimentacao } = req.body;
+  if (!objetivo?.trim() || !alimentacao?.trim())
+    return res.status(400).json({ erro: 'Informe o objetivo e a alimentação' });
+
+  // Só a nutricionista dona da dieta consegue alterá-la
+  const r = await pool.query(
+    `UPDATE dieta SET objetivo = $1, observacoes = $2, alimentacao = $3, atualizado_em = NOW()
+     WHERE id_dieta = $4 AND FK_id_nutricionista = $5
+     RETURNING id_dieta`,
+    [objetivo.trim(), observacoes || '', alimentacao, req.params.id, req.user!.id]
+  );
+  if (!r.rowCount) return res.status(404).json({ erro: 'Dieta não encontrada' });
+  res.json(r.rows[0]);
+}));
 
 // ---------------------------------------------------------------
 // Aluno: resumo (profissionais e objetivo) e edição de perfil

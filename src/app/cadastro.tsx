@@ -23,6 +23,7 @@ const TIPO_API: Record<string, 'aluno' | 'professor' | 'nutricionista'> = {
 export default function CadastroScreen() {
   const router = useRouter();
 
+  // Armazena as informações preenchidas no formulário
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -30,6 +31,7 @@ export default function CadastroScreen() {
   const [comprovacao, setComprovacao] = useState(''); // aprovação se for nutri ou prof
   const [carregando, setCarregando] = useState(false);
 
+  // Mensagem pra preencher todos os campos
   const handleCadastro = async () => {
     if (!nome.trim() || !email.trim() || !senha) {
       avisar('Erro', 'Por favor, preencha todos os campos obrigatórios.');
@@ -41,6 +43,7 @@ export default function CadastroScreen() {
       avisar('Atenção', `Por favor, informe o seu ${documento} para comprovação.`);
       return;
     }
+
 
     setCarregando(true);
     try {
@@ -64,13 +67,16 @@ export default function CadastroScreen() {
   };
 
   return (
+    {/* Ajusta a tela quando o teclado aparece */}
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.innerContainer}
       >
+        {/* Permite rolar a tela caso o conteúdo não caiba */}
         <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-          
+
+          {/* Cabeçalho com o nome */}
           <View style={styles.headerContainer}>
             <Text style={styles.logoText}>TechFit</Text>
             <Text style={styles.subtitleText}>Crie a sua conta</Text>
@@ -112,8 +118,10 @@ export default function CadastroScreen() {
               onChangeText={setSenha}
             />
 
-            {/* selecionar se e alu, prof ou nutri */}
+            {/* selecionar se e aluno, professor ou nutricionista */}
             <Text style={styles.label}>Você é:</Text>
+
+            {/* Opções para escolher o tipo de usuário */}
             <View style={styles.dropdownContainer}>
               <TouchableOpacity
                 style={[styles.dropdownOption, perfil === 'Aluno' && styles.optionSelected]}
@@ -196,6 +204,7 @@ export default function CadastroScreen() {
   );
 }
 
+{/* CSS */}
 const styles = StyleSheet.create({
   container: {
     flex: 1,

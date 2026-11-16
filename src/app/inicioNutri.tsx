@@ -1,4 +1,3 @@
-// src/app/inicioNutri.tsx
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -61,35 +60,37 @@ export default function InicioNutriScreen() {
   const sessao = getSessao();
   const token = sessao?.token;
 
-  // controla as abas debaixo
+  // Controla as abas inferiores da tela
   const [abaAtiva, setAbaAtiva] = useState('alunos');
   const [carregando, setCarregando] = useState(true);
 
-  // dados vindos do banco
+  // Dados dos alunos
   const [alunos, setAlunos] = useState<AlunoApi[]>([]);
 
-  // dados do perfil da nutricionista logada
+  // Dados do perfil da nutricionista logada
   const [nutriNome, setNutriNome] = useState('');
   const [nutriEmail, setNutriEmail] = useState('');
   const [nutriCrn, setNutriCrn] = useState('');
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
 
   // montagem / edição da dieta
+  // Dados do aluno selecionado e objetivo da dieta
   const [alunoSelecionadoId, setAlunoSelecionadoId] = useState<number | null>(null);
   const [dietaId, setDietaId] = useState<number | null>(null); // preenchido quando já existe dieta (edição)
   const [carregandoDieta, setCarregandoDieta] = useState(false);
   const [objetivoDieta, setObjetivoDieta] = useState('');
   const [observacoesDieta, setObservacoesDieta] = useState('');
 
-  // refeição em montagem (título + itens)
+  // Campos para montar uma refeição
   const [tituloRefeicao, setTituloRefeicao] = useState('');
   const [itemAlimento, setItemAlimento] = useState('');
   const [listaItens, setListaItens] = useState<string[]>([]);
 
-  // refeições já adicionadas à dieta
+  // Lista de refeições já adicionadas à dieta
   const [refeicoes, setRefeicoes] = useState<Refeicao[]>([]);
   const [salvandoDieta, setSalvandoDieta] = useState(false);
 
+  // Identifica qual aluno está selecionado no momento
   const alunoSelecionado = alunos.find((a) => a.id_aluno === alunoSelecionadoId) ?? null;
 
   // ---------- Sair e tratamento de erros ----------
@@ -207,11 +208,27 @@ export default function InicioNutriScreen() {
   };
 
   const handleEditarDietaAluno = async (id: number) => {
+  // Trocar de aluno começa uma dieta nova (evita enviar a dieta para o aluno errado)
+  const selecionarAluno = (id: number) => {
+    if (id !== alunoSelecionadoId) {
+      setRefeicoes([]);
+      setObjetivoDieta('');
+      setObservacoesDieta('');
+      setTituloRefeicao('');
+      setItemAlimento('');
+      setListaItens([]);
+    }
+    setAlunoSelecionadoId(id);
+  };
+
+  // Abre a tela de montagem da dieta para o aluno escolhido
+  const handleEditarDietaAluno = (id: number) => {
+    selecionarAluno(id);
     setAbaAtiva('dietas');
     await abrirDietaDoAluno(id);
   };
 
-  // adicionar alimento à refeição em montagem
+  // Adiciona um alimento à refeição que está sendo montada
   const handleAdicionarItem = () => {
     if (!itemAlimento.trim()) {
       avisar('Atenção', 'Digite o alimento antes de adicionar.');
@@ -221,7 +238,7 @@ export default function InicioNutriScreen() {
     setItemAlimento('');
   };
 
-  // remover um item da refeição em montagem
+  // Remove um alimento da lista da refeição
   const handleRemoverItem = (indexParaRemover: number) => {
     setListaItens(listaItens.filter((_, index) => index !== indexParaRemover));
   };
@@ -229,7 +246,7 @@ export default function InicioNutriScreen() {
   // O ":" separa o título dos itens quando o aluno vê a dieta, então não pode ficar no título
   const limparTitulo = (texto: string) => texto.trim().replace(/:/g, '');
 
-  // adicionar a refeição pronta à dieta
+  // Adiciona a refeição finalizada à lista da dieta
   const handleAdicionarRefeicao = () => {
     const titulo = limparTitulo(tituloRefeicao);
     if (!titulo || listaItens.length === 0) {
@@ -254,6 +271,7 @@ export default function InicioNutriScreen() {
     setRefeicoes(refeicoes.filter((_, i) => i !== index));
   };
 
+  // Remove uma refeição que já foi adicionada à dieta
   const handleRemoverRefeicao = (indexParaRemover: number) => {
     setRefeicoes(refeicoes.filter((_, index) => index !== indexParaRemover));
   };
@@ -271,6 +289,7 @@ export default function InicioNutriScreen() {
     );
   };
 
+  // Finaliza a montagem e salva a dieta do aluno selecionado
   const handleSalvarDieta = async () => {
     if (!alunoSelecionado) {
       avisar('Erro', 'Selecione um aluno.');
@@ -335,7 +354,7 @@ export default function InicioNutriScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* cabeçalho */}
+      {/* Cabeçalho */}
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
           <View>
@@ -351,7 +370,7 @@ export default function InicioNutriScreen() {
           <ActivityIndicator size="large" color="#059669" style={{ marginTop: 40 }} />
 
         ) : abaAtiva === 'alunos' ? (
-          // aba 1
+          // Aba 1: lista de alunos acompanhados
           <View>
             <Text style={styles.sectionTitle}>Alunos em Acompanhamento Nutricional</Text>
 
@@ -382,6 +401,7 @@ export default function InicioNutriScreen() {
               </View>
             ))}
 
+            {/* Botão para cadastrar um novo aluno */}
             <TouchableOpacity 
               style={styles.buttonAction} 
               onPress={() => router.push('/cadastrarAluno' as any)}
@@ -391,7 +411,7 @@ export default function InicioNutriScreen() {
           </View>
 
         ) : abaAtiva === 'dietas' ? (
-          // aba 2
+          // Aba 2: formulário para montar ou editar dietas
           <View>
             <Text style={styles.sectionTitle}>Montar/Editar Dieta</Text>
 
@@ -403,6 +423,7 @@ export default function InicioNutriScreen() {
               </View>
             ) : (
               <>
+                {/* Seleção do aluno que receberá a dieta */}
                 <Text style={styles.label}>Selecione o Aluno:</Text>
                 <View style={styles.alunoSelectorContainer}>
                   {alunos.map((aluno) => (
@@ -444,6 +465,25 @@ export default function InicioNutriScreen() {
                       value={objetivoDieta}
                       onChangeText={setObjetivoDieta}
                     />
+                {/* Campo para informar o objetivo da dieta */}
+                <Text style={styles.label}>Objetivo da Dieta</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ex: Ganho de massa magra"
+                  placeholderTextColor="#A0AEC0"
+                  value={objetivoDieta}
+                  onChangeText={setObjetivoDieta}
+                />
+
+                {/* Campo para informar o título da refeição */}
+                <Text style={styles.label}>Título da Refeição (Ex: Café da Manhã)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ex: Café da Manhã"
+                  placeholderTextColor="#A0AEC0"
+                  value={tituloRefeicao}
+                  onChangeText={setTituloRefeicao}
+                />
 
                     {/* refeições já adicionadas */}
                     <Text style={[styles.label, { marginTop: 20 }]}>
@@ -501,6 +541,26 @@ export default function InicioNutriScreen() {
                       <TouchableOpacity style={styles.btnAddItem} onPress={handleAdicionarItem}>
                         <Text style={styles.btnAddItemText}>+ Adicionar</Text>
                       </TouchableOpacity>
+                {/* Botão para adicionar a refeição completa à dieta */}
+                <TouchableOpacity style={styles.buttonAction} onPress={handleAdicionarRefeicao}>
+                  <Text style={styles.buttonActionText}>+ Adicionar refeição à dieta</Text>
+                </TouchableOpacity>
+
+                {/* refeições já adicionadas */}
+                <Text style={[styles.label, { marginTop: 20 }]}>
+                  Refeições da dieta ({refeicoes.length})
+                </Text>
+
+                {refeicoes.length === 0 && (
+                  <Text style={styles.cardText}>Nenhuma refeição adicionada ainda.</Text>
+                )}
+
+                {/* Lista das refeições adicionadas, com opção de remoção */}
+                {refeicoes.map((refeicao, index) => (
+                  <View key={index} style={styles.refeicaoCard}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.refeicaoTitulo}>{refeicao.titulo}</Text>
+                      <Text style={styles.refeicaoItens}>{refeicao.itens.join(' + ')}</Text>
                     </View>
 
                     {/* lista de itens */}
@@ -547,15 +607,39 @@ export default function InicioNutriScreen() {
                     </TouchableOpacity>
                   </>
                 )}
+                {/* Campo para orientações e observações nutricionais */}
+                <Text style={styles.label}>Orientações Nutricionais / Observações</Text>
+                <TextInput
+                  style={[styles.input, { height: 70, textAlignVertical: 'top' }]}
+                  placeholder="Ex: Beber água, substituir se necessário..."
+                  placeholderTextColor="#A0AEC0"
+                  multiline
+                  value={observacoesDieta}
+                  onChangeText={setObservacoesDieta}
+                />
+
+                {/* Botão para finalizar a dieta */}
+                <TouchableOpacity
+                  style={[styles.buttonPrimary, salvandoDieta && { opacity: 0.6 }]}
+                  onPress={handleSalvarDieta}
+                  disabled={salvandoDieta}
+                >
+                  <Text style={styles.buttonPrimaryText}>
+                    {salvandoDieta
+                      ? 'Salvando...'
+                      : `Salvar Dieta de ${alunoSelecionado?.nome ?? ''}`}
+                  </Text>
+                </TouchableOpacity>
               </>
             )}
           </View>
 
         ) : (
-          // aba 3
+          // Aba 3: perfil da nutricionista
           <View>
             <Text style={styles.sectionTitle}>Meu Perfil Nutricional</Text>
 
+            {/* Campos para visualizar e editar os dados pessoais */}
             <Text style={styles.label}>Nome Completo</Text>
             <TextInput
               style={styles.input}
@@ -579,6 +663,7 @@ export default function InicioNutriScreen() {
               onChangeText={setNutriCrn}
             />
 
+            {/* Botão para salvar as alterações do perfil */}
             <TouchableOpacity
               style={[styles.buttonPrimary, salvandoPerfil && { opacity: 0.6 }]}
               onPress={handleSalvarPerfil}
@@ -600,7 +685,7 @@ export default function InicioNutriScreen() {
 
       </ScrollView>
 
-      {/* abas debaixo */}
+      {/* Menu inferior para navegar entre as telas */}
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tabButton, abaAtiva === 'alunos' && styles.tabButtonActive]}
@@ -630,7 +715,7 @@ export default function InicioNutriScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Sair */}
+      {/* Botão para sair da conta */}
       <TouchableOpacity style={styles.logoutButton} onPress={sair}>
         <Text style={styles.logoutText}>Sair da Conta</Text>
       </TouchableOpacity>
@@ -638,6 +723,9 @@ export default function InicioNutriScreen() {
     </SafeAreaView>
   );
 }
+
+
+{/*CSS */ }
 
 const styles = StyleSheet.create({
   container: {

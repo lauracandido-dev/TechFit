@@ -36,6 +36,7 @@ const ROTA_INICIAL = {
 export default function LoginScreen() {
   const router = useRouter();
 
+  // Armazena o e-mail, a senha e o perfil selecionado
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [perfil, setPerfil] = useState('Aluno');//começa no aluno, padrão
@@ -54,7 +55,7 @@ export default function LoginScreen() {
         body: JSON.stringify({ email: email.trim().toLowerCase(), senha }),
       });
 
-      // O perfil escolhido na tela precisa bater com o perfil real da conta
+      // O perfil escolhido na tela precisa bater com o perfil real da conta - verificação
       if (dados.usuario.papel !== PERFIL_PARA_PAPEL[perfil]) {
         avisar(
           'Perfil incorreto',
@@ -74,6 +75,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Ajusta a tela conforme o teclado aparece */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.innerContainer}
@@ -85,6 +87,7 @@ export default function LoginScreen() {
 
         {/* forms */}
         <View style={styles.formContainer}>
+
           {/* email */}
           <Text style={styles.label}>E-mail</Text>
           <TextInput
@@ -110,6 +113,8 @@ export default function LoginScreen() {
 
           {/* selecionar se é alu, prof ou nutri */}
           <Text style={styles.label}>Você é:</Text>
+
+          {/* Opções para selecionar o tipo de usuário */}
           <View style={styles.dropdownContainer}>
             <TouchableOpacity
               style={[styles.dropdownOption, perfil === 'Aluno' && styles.optionSelected]}
@@ -167,6 +172,7 @@ export default function LoginScreen() {
   );
 }
 
+{/* CSS */}
 const styles = StyleSheet.create({
   container: {
     flex: 1,

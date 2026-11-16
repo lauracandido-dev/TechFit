@@ -16,12 +16,14 @@ export default function CadastrarAlunoScreen() {
   const router = useRouter();
   const token = getSessao()?.token;
 
+  // Variáveis que armazenam as informações digitadas nos campos
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [objetivo, setObjetivo] = useState('');
   const [salvando, setSalvando] = useState(false);
 
+  // Mensagem pra preencher os campos caso no usuário não preencha algum
   const handleSalvarAluno = async () => {
     if (!nome.trim() || !email.trim() || !senha || !objetivo.trim()) {
       avisar('Campos Obrigatórios', 'Por favor, preencha todos os campos do aluno.');
@@ -70,7 +72,9 @@ export default function CadastrarAlunoScreen() {
         <Text style={styles.headerTitle}>Cadastrar Novo Aluno</Text>
       </View>
 
+      {/* Área com os campos de cadastro */}
       <ScrollView contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
+        {/* Campo para o nome do aluno */}
         <Text style={styles.label}>Nome Completo do Aluno</Text>
         <TextInput
           style={styles.input}
@@ -80,6 +84,7 @@ export default function CadastrarAlunoScreen() {
           onChangeText={setNome}
         />
 
+        {/* Campo para o email do aluno */}
         <Text style={styles.label}>E-mail de Acesso do Aluno</Text>
         <TextInput
           style={styles.input}
@@ -91,6 +96,7 @@ export default function CadastrarAlunoScreen() {
           onChangeText={setEmail}
         />
 
+        {/* Campo para a senha do aluno */}
         <Text style={styles.label}>Senha Inicial do Aluno</Text>
         <TextInput
           style={styles.input}
@@ -105,6 +111,8 @@ export default function CadastrarAlunoScreen() {
           ignorados e ele apenas é vinculado a você.
         </Text>
 
+
+        {/* Campo para o objetivo do aluno */}
         <Text style={styles.label}>Objetivo Inicial</Text>
         <TextInput
           style={styles.input}
@@ -114,6 +122,8 @@ export default function CadastrarAlunoScreen() {
           onChangeText={setObjetivo}
         />
 
+
+        {/* Botão para cadastrar */}
         <TouchableOpacity
           style={[styles.buttonPrimary, salvando && { opacity: 0.6 }]}
           onPress={handleSalvarAluno}
@@ -128,6 +138,8 @@ export default function CadastrarAlunoScreen() {
   );
 }
 
+
+{/* CSS */}
 const styles = StyleSheet.create({
   container: {
     flex: 1,

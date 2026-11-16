@@ -1,60 +1,117 @@
-<<<<<<< HEAD
-# Welcome to your Expo app 👋
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+# TechFit
 
-## Get started
+O **TechFit** é um aplicativo de gerenciamento para academias.
 
-1. Install dependencies
+O objetivo do projeto é facilitar a organização das atividades de uma academia, reunindo informações de alunos, treinos, dietas e profissionais em uma única aplicação.
 
-   ```bash
-   npm install
-   ```
+O aplicativo possui três perfis de usuário: **Aluno, Professor e Nutricionista**, cada um com telas e funcionalidades específicas.
 
-2. Start the app
+## Funcionalidades
 
-   ```bash
-   npx expo start
-   ```
+### Login e Cadastro
+- Tela de login.
+- Cadastro de usuários.
+- Seleção do perfil de acesso.
+- Acesso às áreas correspondentes a cada tipo de usuário.
 
-In the output, you'll find options to open the app in a
+### Aluno
+- Painel inicial do aluno.
+- Consulta de treinos.
+- Consulta de dietas.
+- Área de aulas e reservas.
+- Visualização do perfil.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Professor
+- Painel inicial do professor.
+- Visualização dos alunos cadastrados.
+- Área para criação e edição de treinos.
+- Visualização do perfil.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Nutricionista
+- Painel inicial da nutricionista.
+- Visualização dos alunos cadastrados.
+- Área para criação e edição de dietas.
+- Organização de refeições e alimentos.
+- Visualização do perfil.
 
-## Get a fresh project
+### Cadastro de Alunos
+- Formulário para preenchimento dos dados dos alunos.
+- Interface para cadastro de novos alunos.
 
-When you're ready, run:
+## Tecnologias utilizadas
+
+- **React Native:** desenvolvimento das interfaces do aplicativo.
+- **Expo:** ambiente utilizado para executar e desenvolver a aplicação.
+- **TypeScript:** implementação da lógica e dos componentes, com tipagem estática.
+- **TSX:** extensão utilizada nos arquivos que combinam TypeScript e componentes React.
+- **Expo Router:** organização das telas e navegação da aplicação.
+- **React Hooks:** gerenciamento de estados e interações das interfaces.
+
+## Estrutura do projeto
+
+As telas foram organizadas em arquivos separados, de acordo com suas funcionalidades:
+
+| Arquivo | Descrição |
+|---|---|
+| `index.tsx` | Tela de login |
+| `cadastro.tsx` | Tela de cadastro de usuários |
+| `cadastrarAluno.tsx` | Cadastro de alunos |
+| `inicioAluno.tsx` | Painel do aluno |
+| `inicioProf.tsx` | Painel do professor |
+| `inicioNutri.tsx` | Painel da nutricionista |
+
+## Como executar o projeto
+
+### Pré-requisitos
+
+- Node.js instalado.
+- npm instalado.
+- Expo Go no celular ou um emulador configurado.
+
+### Instalação
+
+1. Clone o repositório:
 
 ```bash
-npm run reset-project
+git clone https://github.com/lauracandido-dev/TechFit.git
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Entre na pasta do projeto:
 
-### Other setup steps
+```bash
+cd TechFit
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+3. Instale as dependências:
 
-## Learn more
+```bash
+npm install
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+4. Inicie a aplicação:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npx expo start
+```
 
-## Join the community
+Após iniciar, será possível abrir o aplicativo pelo Expo Go ou por um emulador Android/iOS.
 
-Join our community of developers creating universal apps.
+## Objetivo acadêmico
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-=======
-# TechFit
->>>>>>> cd22da37b947783e13f5bb70b1a8fafb67855cc5
+O TechFit foi desenvolvido no segundo semestre de 2026, como parte da disciplina de Engenharia de Software do Centro Universitário FEI.
+
+O projeto permitiu aplicar conhecimentos de desenvolvimento mobile, organização de componentes, navegação entre telas e utilização de TypeScript com React Native.
+
+## Integrantes
+
+- Camille Pereira Hernandes
+- Laura Candido da Silva
+- Leonardo Henrique Vieira Bardini
+- Guilherme Proença
+
+**Professora:** Renata M. Nogueira de Oliveira
+
+---
+
+**TechFit — Mais organização para a academia, mais praticidade para os alunos.**

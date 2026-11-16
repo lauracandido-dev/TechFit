@@ -151,7 +151,7 @@ export default function InicioAlunoScreen() {
   const sessao = getSessao();
   const token = sessao?.token;
 
-  // Controla as abas debaixo (incluindo 'perfil')
+  // Controla as abas debaixo 
   const [abaAtiva, setAbaAtiva] = useState('inicio');
   const [carregando, setCarregando] = useState(true);
   const [processando, setProcessando] = useState<number | null>(null); // aula em andamento
@@ -319,6 +319,7 @@ export default function InicioAlunoScreen() {
 
         ) : abaAtiva === 'inicio' ? (
           <View>
+            {/* Tela inicial com o resumo da conta */}
             <Text style={styles.sectionTitle}>Resumo da sua Conta</Text>
 
             <View style={styles.card}>
@@ -339,6 +340,7 @@ export default function InicioAlunoScreen() {
 
         ) : abaAtiva === 'treino' ? (
           <View>
+            {/* Lista de exercícios do treino atual */}
             <Text style={styles.sectionTitle}>Seu Treino Atual</Text>
 
             {treino ? (
@@ -378,6 +380,7 @@ export default function InicioAlunoScreen() {
 
         ) : abaAtiva === 'dieta' ? (
           <View>
+            {/* Refeições e observações da dieta */}
             <Text style={styles.sectionTitle}>Sua Dieta Atual</Text>
 
             {dieta ? (
@@ -408,6 +411,7 @@ export default function InicioAlunoScreen() {
 
         ) : abaAtiva === 'aulas' ? (
           <View>
+            {/* Aulas disponíveis para inscrição */}
             <Text style={styles.sectionTitle}>Aulas Programadas</Text>
             <Text style={styles.subtitleSub}>Selecione e garanta sua vaga na aula</Text>
 
@@ -458,8 +462,9 @@ export default function InicioAlunoScreen() {
           </View>
 
         ) : (
-          // aba 5
+          // Aba de perfil do aluno
           <View>
+            {/* Campos para visualizar e editar os dados do perfil */}
             <Text style={styles.sectionTitle}>Meu Perfil</Text>
 
             <Text style={styles.label}>Nome Completo</Text>
@@ -506,7 +511,7 @@ export default function InicioAlunoScreen() {
 
       </ScrollView>
 
-      {/* abas debaixo */}
+      {/* Menu inferior para navegar entre as telas */}
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tabButton, abaAtiva === 'inicio' && styles.tabButtonActive]}
@@ -558,6 +563,7 @@ export default function InicioAlunoScreen() {
   );
 }
 
+{/* CSS */}
 const styles = StyleSheet.create({
   container: {
     flex: 1,

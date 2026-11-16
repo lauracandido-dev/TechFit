@@ -37,6 +37,12 @@ interface ItemTreino {
   repeticoes: number;
   descanso: string;
 }
+interface TreinoApi {
+  id_treino: number;
+  objetivo: string;
+  observacoes: string;
+  exercicios: ItemTreino[];
+}
 
 export default function InicioProfScreen() {
   const router = useRouter();
@@ -57,8 +63,10 @@ export default function InicioProfScreen() {
   const [profCref, setProfCref] = useState('');
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
 
-  // montagem do treino
+  // montagem / edição do treino
   const [alunoSelecionadoId, setAlunoSelecionadoId] = useState<number | null>(null);
+  const [treinoId, setTreinoId] = useState<number | null>(null); // preenchido quando já existe treino (edição)
+  const [carregandoTreino, setCarregandoTreino] = useState(false);
   const [objetivoTreino, setObjetivoTreino] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [exercicioId, setExercicioId] = useState<number>(0); // 0 = "Outro (Personalizado)"
@@ -93,6 +101,27 @@ export default function InicioProfScreen() {
     return lista;
   };
 
+  // Seleciona o aluno e carrega o treino atual dele no formulário (ou deixa em branco)
+  const abrirTreinoDoAluno = async (id: number) => {
+    setAlunoSelecionadoId(id);
+    setCarregandoTreino(true);
+    try {
+      const { treino } = await api<{ treino: TreinoApi | null }>(
+        `/professor/alunos/${id}/treino`,
+        {},
+        token
+      );
+      setTreinoId(treino?.id_treino ?? null);
+      setObjetivoTreino(treino?.objetivo ?? '');
+      setObservacoes(treino?.observacoes ?? '');
+      setItensTreino(treino?.exercicios ?? []);
+    } catch (e: any) {
+      tratarErro(e);
+    } finally {
+      setCarregandoTreino(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) {
       router.replace('/');
@@ -107,11 +136,11 @@ export default function InicioProfScreen() {
           api<PerfilApi>('/professor/perfil', {}, token),
         ]);
         setCatalogo(exercicios);
-        setAlunoSelecionadoId(listaAlunos[0]?.id_aluno ?? null);
         setExercicioId(exercicios[0]?.id_exercicio ?? 0);
         setProfNome(perfil.nome);
         setProfEmail(perfil.email);
         setProfCref(perfil.cref);
+        if (listaAlunos[0]) await abrirTreinoDoAluno(listaAlunos[0].id_aluno);
       } catch (e: any) {
         tratarErro(e);
       } finally {
@@ -119,17 +148,16 @@ export default function InicioProfScreen() {
       }
     })();
   }, []);
-  // Atualiza a lista de alunos ao voltar de outra tela (ex.: Cadastrar Novo Aluno)
 
-  
-useFocusEffect(
-  useCallback(() => {
-    if (!token) return;
-    carregarAlunos()
-      .then((lista) => setAlunoSelecionadoId((atual) => atual ?? lista[0]?.id_aluno ?? null))
-      .catch(() => {});
-  }, [token])
-);
+  // Atualiza a lista de alunos ao voltar de outra tela (ex.: Cadastrar Novo Aluno)
+  useFocusEffect(
+    useCallback(() => {
+      if (!token) return;
+      carregarAlunos()
+        .then((lista) => setAlunoSelecionadoId((atual) => atual ?? lista[0]?.id_aluno ?? null))
+        .catch(() => {});
+    }, [token])
+  );
 
   // ---------- Ações ----------
   const handleSalvarPerfil = async () => {
@@ -166,19 +194,9 @@ useFocusEffect(
     }
   };
 
-  // Trocar de aluno começa um treino novo (evita enviar o treino para o aluno errado)
-  const selecionarAluno = (id: number) => {
-    if (id !== alunoSelecionadoId) {
-      setItensTreino([]);
-      setObjetivoTreino('');
-      setObservacoes('');
-    }
-    setAlunoSelecionadoId(id);
-  };
-
-  const handleEditarTreinoAluno = (id: number) => {
-    selecionarAluno(id);
+  const handleEditarTreinoAluno = async (id: number) => {
     setAbaAtiva('treinos');
+    await abrirTreinoDoAluno(id);
   };
 
   // Adiciona o exercício preenchido à lista do treino
@@ -233,6 +251,16 @@ useFocusEffect(
     }
   };
 
+  // Tira o exercício da lista e devolve os dados para o formulário, para alterar e adicionar de novo
+  const handleEditarExercicio = (index: number) => {
+    const item = itensTreino[index];
+    setExercicioId(item.id_exercicio);
+    setSeries(String(item.series));
+    setRepeticoes(String(item.repeticoes));
+    setDescanso(item.descanso);
+    setItensTreino((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleRemoverExercicio = (index: number) => {
     setItensTreino((prev) => prev.filter((_, i) => i !== index));
   };
@@ -251,32 +279,35 @@ useFocusEffect(
       return;
     }
 
+    const corpo = {
+      objetivo: objetivoTreino.trim(),
+      observacoes: observacoes.trim(),
+      exercicios: itensTreino.map(({ id_exercicio, series, repeticoes, descanso }) => ({
+        id_exercicio,
+        series,
+        repeticoes,
+        descanso,
+      })),
+    };
+
     setSalvandoTreino(true);
     try {
-      await api(
-        '/treinos',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            id_aluno: alunoSelecionado.id_aluno,
-            objetivo: objetivoTreino.trim(),
-            observacoes: observacoes.trim(),
-            exercicios: itensTreino.map(({ id_exercicio, series, repeticoes, descanso }) => ({
-              id_exercicio,
-              series,
-              repeticoes,
-              descanso,
-            })),
-          }),
-        },
-        token
-      );
+      if (treinoId) {
+        // já existe: atualiza o mesmo treino
+        await api(`/treinos/${treinoId}`, { method: 'PUT', body: JSON.stringify(corpo) }, token);
+        avisar('Sucesso!', `Treino de ${alunoSelecionado.nome} atualizado!`);
+      } else {
+        // ainda não existe: cria
+        await api(
+          '/treinos',
+          { method: 'POST', body: JSON.stringify({ ...corpo, id_aluno: alunoSelecionado.id_aluno }) },
+          token
+        );
+        avisar('Sucesso!', `Treino de ${alunoSelecionado.nome} criado com ${itensTreino.length} exercício(s)!`);
+      }
 
-      avisar('Sucesso!', `Treino de ${alunoSelecionado.nome} salvo com ${itensTreino.length} exercício(s)!`);
-      setItensTreino([]);
-      setObjetivoTreino('');
-      setObservacoes('');
-      await carregarAlunos();
+      // Recarrega do banco para mostrar exatamente o que ficou salvo
+      await Promise.all([abrirTreinoDoAluno(alunoSelecionado.id_aluno), carregarAlunos()]);
     } catch (e: any) {
       tratarErro(e);
     } finally {
@@ -364,7 +395,7 @@ useFocusEffect(
                         styles.alunoChip,
                         alunoSelecionadoId === aluno.id_aluno && styles.alunoChipSelected
                       ]}
-                      onPress={() => selecionarAluno(aluno.id_aluno)}
+                      onPress={() => abrirTreinoDoAluno(aluno.id_aluno)}
                     >
                       <Text style={[
                         styles.alunoChipText,
@@ -376,147 +407,166 @@ useFocusEffect(
                   ))}
                 </View>
 
-                <Text style={styles.label}>Objetivo do Treino</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex: Hipertrofia de Membros Superiores"
-                  placeholderTextColor="#A0AEC0"
-                  value={objetivoTreino}
-                  onChangeText={setObjetivoTreino}
-                />
-
-                <Text style={styles.label}>Observações (opcional)</Text>
-                <TextInput
-                  style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]}
-                  placeholder="Ex: Treinar 3x por semana, com carga moderada"
-                  placeholderTextColor="#A0AEC0"
-                  value={observacoes}
-                  onChangeText={setObservacoes}
-                  multiline
-                />
-
-                <Text style={styles.label}>Selecione o Exercício:</Text>
-                <View style={styles.pickerContainer}>
-                  {catalogo.map((item) => (
-                    <TouchableOpacity
-                      key={item.id_exercicio}
-                      style={[
-                        styles.exercicioOption,
-                        exercicioId === item.id_exercicio && styles.exercicioSelected,
-                      ]}
-                      onPress={() => setExercicioId(item.id_exercicio)}
-                    >
-                      <Text
-                        style={[
-                          styles.exercicioText,
-                          exercicioId === item.id_exercicio && styles.exercicioTextSelected,
-                        ]}
-                      >
-                        {item.nome}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-
-                  <TouchableOpacity
-                    style={[styles.exercicioOption, exercicioId === 0 && styles.exercicioSelected]}
-                    onPress={() => setExercicioId(0)}
-                  >
-                    <Text style={[styles.exercicioText, exercicioId === 0 && styles.exercicioTextSelected]}>
-                      Outro (Personalizado)
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {exercicioId === 0 && (
+                {carregandoTreino ? (
+                  <ActivityIndicator size="small" color="#D97706" style={{ marginVertical: 30 }} />
+                ) : (
                   <>
-                    <Text style={styles.label}>Nome do Exercício Personalizado:</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Ex: Elevação Lateral com Halteres"
-                      placeholderTextColor="#A0AEC0"
-                      value={nomeOutroExercicio}
-                      onChangeText={setNomeOutroExercicio}
-                    />
-                  </>
-                )}
-
-                <View style={styles.rowContainer}>
-                  <View style={styles.column}>
-                    <Text style={styles.label}>Séries</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="3"
-                      keyboardType="numeric"
-                      value={series}
-                      onChangeText={setSeries}
-                    />
-                  </View>
-
-                  <View style={styles.column}>
-                    <Text style={styles.label}>Repetições</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="12"
-                      keyboardType="numeric"
-                      value={repeticoes}
-                      onChangeText={setRepeticoes}
-                    />
-                  </View>
-
-                  <View style={styles.column}>
-                    <Text style={styles.label}>Descanso</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="60s"
-                      value={descanso}
-                      onChangeText={setDescanso}
-                    />
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.buttonAction, adicionando && { opacity: 0.6 }]}
-                  onPress={handleAdicionarExercicio}
-                  disabled={adicionando}
-                >
-                  <Text style={styles.buttonActionText}>
-                    {adicionando ? 'Adicionando...' : '+ Adicionar ao treino'}
-                  </Text>
-                </TouchableOpacity>
-
-                <Text style={[styles.label, { marginTop: 20 }]}>
-                  Exercícios do treino ({itensTreino.length})
-                </Text>
-
-                {itensTreino.length === 0 && (
-                  <Text style={styles.cardText}>Nenhum exercício adicionado ainda.</Text>
-                )}
-
-                {itensTreino.map((item, index) => (
-                  <View key={index} style={styles.itemTreino}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.itemTreinoNome}>{item.nome}</Text>
-                      <Text style={styles.itemTreinoDetalhe}>
-                        {item.series}x{item.repeticoes} · Descanso: {item.descanso}
+                    <View style={styles.avisoEdicao}>
+                      <Text style={styles.avisoEdicaoTexto}>
+                        {treinoId
+                          ? `✏️ Editando o treino atual de ${alunoSelecionado?.nome ?? ''}. Altere, remova ou adicione exercícios e salve.`
+                          : `🆕 Novo treino para ${alunoSelecionado?.nome ?? ''}.`}
                       </Text>
                     </View>
-                    <TouchableOpacity onPress={() => handleRemoverExercicio(index)}>
-                      <Text style={styles.removerTexto}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
 
-                <TouchableOpacity
-                  style={[styles.buttonPrimary, salvandoTreino && { opacity: 0.6 }]}
-                  onPress={handleSalvarTreino}
-                  disabled={salvandoTreino}
-                >
-                  <Text style={styles.buttonPrimaryText}>
-                    {salvandoTreino
-                      ? 'Salvando...'
-                      : `Salvar Treino de ${alunoSelecionado?.nome ?? ''}`}
-                  </Text>
-                </TouchableOpacity>
+                    <Text style={styles.label}>Objetivo do Treino</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Ex: Hipertrofia de Membros Superiores"
+                      placeholderTextColor="#A0AEC0"
+                      value={objetivoTreino}
+                      onChangeText={setObjetivoTreino}
+                    />
+
+                    <Text style={styles.label}>Observações (opcional)</Text>
+                    <TextInput
+                      style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]}
+                      placeholder="Ex: Treinar 3x por semana, com carga moderada"
+                      placeholderTextColor="#A0AEC0"
+                      value={observacoes}
+                      onChangeText={setObservacoes}
+                      multiline
+                    />
+
+                    <Text style={[styles.label, { marginTop: 20 }]}>
+                      Exercícios do treino ({itensTreino.length})
+                    </Text>
+
+                    {itensTreino.length === 0 && (
+                      <Text style={styles.cardText}>Nenhum exercício no treino ainda.</Text>
+                    )}
+
+                    {itensTreino.map((item, index) => (
+                      <View key={`${item.id_exercicio}-${index}`} style={styles.itemTreino}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.itemTreinoNome}>{item.nome}</Text>
+                          <Text style={styles.itemTreinoDetalhe}>
+                            {item.series}x{item.repeticoes} · Descanso: {item.descanso}
+                          </Text>
+                        </View>
+                        <TouchableOpacity onPress={() => handleEditarExercicio(index)}>
+                          <Text style={styles.editarTexto}>Editar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleRemoverExercicio(index)}>
+                          <Text style={styles.removerTexto}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+
+                    <Text style={[styles.label, { marginTop: 24 }]}>Adicionar exercício:</Text>
+                    <View style={styles.pickerContainer}>
+                      {catalogo.map((item) => (
+                        <TouchableOpacity
+                          key={item.id_exercicio}
+                          style={[
+                            styles.exercicioOption,
+                            exercicioId === item.id_exercicio && styles.exercicioSelected,
+                          ]}
+                          onPress={() => setExercicioId(item.id_exercicio)}
+                        >
+                          <Text
+                            style={[
+                              styles.exercicioText,
+                              exercicioId === item.id_exercicio && styles.exercicioTextSelected,
+                            ]}
+                          >
+                            {item.nome}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+
+                      <TouchableOpacity
+                        style={[styles.exercicioOption, exercicioId === 0 && styles.exercicioSelected]}
+                        onPress={() => setExercicioId(0)}
+                      >
+                        <Text style={[styles.exercicioText, exercicioId === 0 && styles.exercicioTextSelected]}>
+                          Outro (Personalizado)
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {exercicioId === 0 && (
+                      <>
+                        <Text style={styles.label}>Nome do Exercício Personalizado:</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Ex: Elevação Lateral com Halteres"
+                          placeholderTextColor="#A0AEC0"
+                          value={nomeOutroExercicio}
+                          onChangeText={setNomeOutroExercicio}
+                        />
+                      </>
+                    )}
+
+                    <View style={styles.rowContainer}>
+                      <View style={styles.column}>
+                        <Text style={styles.label}>Séries</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="3"
+                          keyboardType="numeric"
+                          value={series}
+                          onChangeText={setSeries}
+                        />
+                      </View>
+
+                      <View style={styles.column}>
+                        <Text style={styles.label}>Repetições</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="12"
+                          keyboardType="numeric"
+                          value={repeticoes}
+                          onChangeText={setRepeticoes}
+                        />
+                      </View>
+
+                      <View style={styles.column}>
+                        <Text style={styles.label}>Descanso</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="60s"
+                          value={descanso}
+                          onChangeText={setDescanso}
+                        />
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={[styles.buttonAction, adicionando && { opacity: 0.6 }]}
+                      onPress={handleAdicionarExercicio}
+                      disabled={adicionando}
+                    >
+                      <Text style={styles.buttonActionText}>
+                        {adicionando ? 'Adicionando...' : '+ Adicionar ao treino'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.buttonPrimary, salvandoTreino && { opacity: 0.6 }]}
+                      onPress={handleSalvarTreino}
+                      disabled={salvandoTreino}
+                    >
+                      <Text style={styles.buttonPrimaryText}>
+                        {salvandoTreino
+                          ? 'Salvando...'
+                          : treinoId
+                            ? `Atualizar Treino de ${alunoSelecionado?.nome ?? ''}`
+                            : `Salvar Treino de ${alunoSelecionado?.nome ?? ''}`}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </>
             )}
           </View>
@@ -695,6 +745,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 15,
   },
+  avisoEdicao: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 6,
+  },
+  avisoEdicaoTexto: {
+    fontSize: 13,
+    color: '#92400E',
+    lineHeight: 18,
+  },
   label: {
     fontSize: 14,
     fontWeight: '600',
@@ -790,6 +853,12 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
+  editarTexto: {
+    color: '#B45309',
+    fontWeight: 'bold',
+    fontSize: 13,
+    paddingHorizontal: 8,
+  },
   removerTexto: {
     color: '#B91C1C',
     fontWeight: 'bold',
@@ -845,9 +914,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   logoutText: {
-    fontSize: 15,
-    color: '#DC2626',
-    fontWeight: 'bold',
+    fontSize: 12,
+    color: '#9CA3AF',
     textDecorationLine: 'underline',
   },
 });

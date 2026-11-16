@@ -1,6 +1,5 @@
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video'; // NOVO: player de vídeo
-import { WebView } from 'react-native-webview'; // NOVO: usado para o player do YouTube
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,6 +12,7 @@ import {
   Vibration, // NOVO: atuador (vibração do celular)
   View,
 } from 'react-native';
+import { WebView } from 'react-native-webview'; // NOVO: usado para o player do YouTube
 import { api, avisar } from '../services/api';
 import { getSessao, limparSessao, salvarSessao } from '../services/sessao';
 
@@ -222,6 +222,23 @@ export default function InicioAlunoScreen() {
       }
     })();
   }, []);
+
+  // Atualiza o treino quando o aluno abre a aba Treino
+  useEffect(() => {
+    if (carregando || abaAtiva !== 'treino' || !token) return;
+
+    async function atualizarTreino() {
+      try {
+        const treinos = await api<TreinoApi[]>('/treinos/meus', {}, token);
+        setTreino(treinos[0] ?? null);
+      } catch (e: any) {
+        tratarErro(e);
+      }
+    }
+
+    atualizarTreino();
+  }, [abaAtiva, carregando]);
+
 
   // ---------- Ações ----------
   const handleSalvarPerfil = async () => {

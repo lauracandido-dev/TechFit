@@ -75,7 +75,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Ajusta a tela conforme o teclado aparece */}
+      /* Ajusta a tela conforme o teclado aparece */
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.innerContainer}
@@ -114,7 +114,7 @@ export default function LoginScreen() {
           /* selecionar se é alu, prof ou nutri */
           <Text style={styles.label}>Você é:</Text>
 
-          {/* Opções para selecionar o tipo de usuário */}
+          /* Opções para selecionar o tipo de usuário */
           <View style={styles.dropdownContainer}>
             <TouchableOpacity
               style={[styles.dropdownOption, perfil === 'Aluno' && styles.optionSelected]}

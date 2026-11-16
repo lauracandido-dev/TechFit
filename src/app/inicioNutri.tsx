@@ -207,23 +207,8 @@ export default function InicioNutriScreen() {
     }
   };
 
-  const handleEditarDietaAluno = async (id: number) => {
-  // Trocar de aluno começa uma dieta nova (evita enviar a dieta para o aluno errado)
-  const selecionarAluno = (id: number) => {
-    if (id !== alunoSelecionadoId) {
-      setRefeicoes([]);
-      setObjetivoDieta('');
-      setObservacoesDieta('');
-      setTituloRefeicao('');
-      setItemAlimento('');
-      setListaItens([]);
-    }
-    setAlunoSelecionadoId(id);
-  };
-
   // Abre a tela de montagem da dieta para o aluno escolhido
-  const handleEditarDietaAluno = (id: number) => {
-    selecionarAluno(id);
+  const handleEditarDietaAluno = async (id: number) => {
     setAbaAtiva('dietas');
     await abrirDietaDoAluno(id);
   };
@@ -365,7 +350,7 @@ export default function InicioNutriScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
-        
+
         {carregando ? (
           <ActivityIndicator size="large" color="#059669" style={{ marginTop: 40 }} />
 
@@ -381,7 +366,7 @@ export default function InicioNutriScreen() {
                 </Text>
               </View>
             )}
-            
+
             {alunos.map((aluno) => (
               <View key={aluno.id_aluno} style={styles.card}>
                 <View style={styles.cardInfo}>
@@ -402,8 +387,8 @@ export default function InicioNutriScreen() {
             ))}
 
             {/* Botão para cadastrar um novo aluno */}
-            <TouchableOpacity 
-              style={styles.buttonAction} 
+            <TouchableOpacity
+              style={styles.buttonAction}
               onPress={() => router.push('/cadastrarAluno' as any)}
             >
               <Text style={styles.buttonActionText}>+ Cadastrar Novo Aluno</Text>
@@ -457,6 +442,7 @@ export default function InicioNutriScreen() {
                       </Text>
                     </View>
 
+                    {/* Campo para informar o objetivo da dieta */}
                     <Text style={styles.label}>Objetivo da Dieta</Text>
                     <TextInput
                       style={styles.input}
@@ -465,27 +451,8 @@ export default function InicioNutriScreen() {
                       value={objetivoDieta}
                       onChangeText={setObjetivoDieta}
                     />
-                {/* Campo para informar o objetivo da dieta */}
-                <Text style={styles.label}>Objetivo da Dieta</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex: Ganho de massa magra"
-                  placeholderTextColor="#A0AEC0"
-                  value={objetivoDieta}
-                  onChangeText={setObjetivoDieta}
-                />
 
-                {/* Campo para informar o título da refeição */}
-                <Text style={styles.label}>Título da Refeição (Ex: Café da Manhã)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex: Café da Manhã"
-                  placeholderTextColor="#A0AEC0"
-                  value={tituloRefeicao}
-                  onChangeText={setTituloRefeicao}
-                />
-
-                    {/* refeições já adicionadas */}
+                    {/* Refeições já adicionadas */}
                     <Text style={[styles.label, { marginTop: 20 }]}>
                       Refeições da dieta ({refeicoes.length})
                     </Text>
@@ -519,6 +486,7 @@ export default function InicioNutriScreen() {
                       </View>
                     ))}
 
+                    {/* Título da refeição que está sendo montada */}
                     <Text style={[styles.label, { marginTop: 24 }]}>Título da Refeição (Ex: Café da Manhã)</Text>
                     <TextInput
                       style={styles.input}
@@ -528,7 +496,7 @@ export default function InicioNutriScreen() {
                       onChangeText={setTituloRefeicao}
                     />
 
-                    {/* adicionar alimento */}
+                    {/* Adicionar alimento */}
                     <Text style={styles.label}>Adicionar Alimento / Item:</Text>
                     <View style={styles.addItemRow}>
                       <TextInput
@@ -541,29 +509,9 @@ export default function InicioNutriScreen() {
                       <TouchableOpacity style={styles.btnAddItem} onPress={handleAdicionarItem}>
                         <Text style={styles.btnAddItemText}>+ Adicionar</Text>
                       </TouchableOpacity>
-                {/* Botão para adicionar a refeição completa à dieta */}
-                <TouchableOpacity style={styles.buttonAction} onPress={handleAdicionarRefeicao}>
-                  <Text style={styles.buttonActionText}>+ Adicionar refeição à dieta</Text>
-                </TouchableOpacity>
-
-                {/* refeições já adicionadas */}
-                <Text style={[styles.label, { marginTop: 20 }]}>
-                  Refeições da dieta ({refeicoes.length})
-                </Text>
-
-                {refeicoes.length === 0 && (
-                  <Text style={styles.cardText}>Nenhuma refeição adicionada ainda.</Text>
-                )}
-
-                {/* Lista das refeições adicionadas, com opção de remoção */}
-                {refeicoes.map((refeicao, index) => (
-                  <View key={index} style={styles.refeicaoCard}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.refeicaoTitulo}>{refeicao.titulo}</Text>
-                      <Text style={styles.refeicaoItens}>{refeicao.itens.join(' + ')}</Text>
                     </View>
 
-                    {/* lista de itens */}
+                    {/* Itens da refeição em andamento */}
                     {listaItens.length > 0 && (
                       <View style={styles.listaItensContainer}>
                         <Text style={styles.listaItensTitulo}>Itens da Refeição:</Text>
@@ -578,10 +526,12 @@ export default function InicioNutriScreen() {
                       </View>
                     )}
 
+                    {/* Botão para adicionar a refeição completa à dieta */}
                     <TouchableOpacity style={styles.buttonAction} onPress={handleAdicionarRefeicao}>
                       <Text style={styles.buttonActionText}>+ Adicionar refeição à dieta</Text>
                     </TouchableOpacity>
 
+                    {/* Campo para orientações e observações nutricionais */}
                     <Text style={styles.label}>Orientações Nutricionais / Observações</Text>
                     <TextInput
                       style={[styles.input, { height: 70, textAlignVertical: 'top' }]}
@@ -592,6 +542,7 @@ export default function InicioNutriScreen() {
                       onChangeText={setObservacoesDieta}
                     />
 
+                    {/* Botão para finalizar a dieta */}
                     <TouchableOpacity
                       style={[styles.buttonPrimary, salvandoDieta && { opacity: 0.6 }]}
                       onPress={handleSalvarDieta}
@@ -607,29 +558,6 @@ export default function InicioNutriScreen() {
                     </TouchableOpacity>
                   </>
                 )}
-                {/* Campo para orientações e observações nutricionais */}
-                <Text style={styles.label}>Orientações Nutricionais / Observações</Text>
-                <TextInput
-                  style={[styles.input, { height: 70, textAlignVertical: 'top' }]}
-                  placeholder="Ex: Beber água, substituir se necessário..."
-                  placeholderTextColor="#A0AEC0"
-                  multiline
-                  value={observacoesDieta}
-                  onChangeText={setObservacoesDieta}
-                />
-
-                {/* Botão para finalizar a dieta */}
-                <TouchableOpacity
-                  style={[styles.buttonPrimary, salvandoDieta && { opacity: 0.6 }]}
-                  onPress={handleSalvarDieta}
-                  disabled={salvandoDieta}
-                >
-                  <Text style={styles.buttonPrimaryText}>
-                    {salvandoDieta
-                      ? 'Salvando...'
-                      : `Salvar Dieta de ${alunoSelecionado?.nome ?? ''}`}
-                  </Text>
-                </TouchableOpacity>
               </>
             )}
           </View>
@@ -674,8 +602,8 @@ export default function InicioNutriScreen() {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.buttonAction, { marginTop: 15, backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]} 
+            <TouchableOpacity
+              style={[styles.buttonAction, { marginTop: 15, backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}
               onPress={() => setAbaAtiva('alunos')}
             >
               <Text style={[styles.buttonActionText, { color: '#B91C1C' }]}>Voltar ao Painel</Text>
@@ -724,9 +652,7 @@ export default function InicioNutriScreen() {
   );
 }
 
-
-{/*CSS */ }
-
+// CSS
 const styles = StyleSheet.create({
   container: {
     flex: 1,

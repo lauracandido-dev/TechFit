@@ -1,4 +1,3 @@
-
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -428,142 +427,8 @@ export default function InicioProfScreen() {
                         {treinoId
                           ? `✏️ Editando o treino atual de ${alunoSelecionado?.nome ?? ''}. Altere, remova ou adicione exercícios e salve.`
                           : `🆕 Novo treino para ${alunoSelecionado?.nome ?? ''}.`}
-
-                {/* Campo para definir o objetivo do treino */}
-                <Text style={styles.label}>Objetivo do Treino</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex: Hipertrofia de Membros Superiores"
-                  placeholderTextColor="#A0AEC0"
-                  value={objetivoTreino}
-                  onChangeText={setObjetivoTreino}
-                />
-
-                {/* Campo opcional para observações */}
-                <Text style={styles.label}>Observações (opcional)</Text>
-                <TextInput
-                  style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]}
-                  placeholder="Ex: Treinar 3x por semana, com carga moderada"
-                  placeholderTextColor="#A0AEC0"
-                  value={observacoes}
-                  onChangeText={setObservacoes}
-                  multiline
-                />
-
-                {/* Lista de opções de exercícios disponíveis */}
-                <Text style={styles.label}>Selecione o Exercício:</Text>
-                <View style={styles.pickerContainer}>
-                  {catalogo.map((item) => (
-                    <TouchableOpacity
-                      key={item.id_exercicio}
-                      style={[
-                        styles.exercicioOption,
-                        exercicioId === item.id_exercicio && styles.exercicioSelected,
-                      ]}
-                      onPress={() => setExercicioId(item.id_exercicio)}
-                    >
-                      <Text
-                        style={[
-                          styles.exercicioText,
-                          exercicioId === item.id_exercicio && styles.exercicioTextSelected,
-                        ]}
-                      >
-                        {item.nome}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-
-                  {/* Opção para adicionar um exercício que não está na lista */}
-                  <TouchableOpacity
-                    style={[styles.exercicioOption, exercicioId === 0 && styles.exercicioSelected]}
-                    onPress={() => setExercicioId(0)}
-                  >
-                    <Text style={[styles.exercicioText, exercicioId === 0 && styles.exercicioTextSelected]}>
-                      Outro (Personalizado)
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Campo que aparece quando o exercício personalizado é selecionado */}
-                {exercicioId === 0 && (
-                  <>
-                    <Text style={styles.label}>Nome do Exercício Personalizado:</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Ex: Elevação Lateral com Halteres"
-                      placeholderTextColor="#A0AEC0"
-                      value={nomeOutroExercicio}
-                      onChangeText={setNomeOutroExercicio}
-                    />
-                  </>
-                )}
-
-                {/* Campos para informar séries, repetições e descanso */}
-                <View style={styles.rowContainer}>
-                  <View style={styles.column}>
-                    <Text style={styles.label}>Séries</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="3"
-                      keyboardType="numeric"
-                      value={series}
-                      onChangeText={setSeries}
-                    />
-                  </View>
-
-                  <View style={styles.column}>
-                    <Text style={styles.label}>Repetições</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="12"
-                      keyboardType="numeric"
-                      value={repeticoes}
-                      onChangeText={setRepeticoes}
-                    />
-                  </View>
-
-                  <View style={styles.column}>
-                    <Text style={styles.label}>Descanso</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="60s"
-                      value={descanso}
-                      onChangeText={setDescanso}
-                    />
-                  </View>
-                </View>
-
-                {/* Adiciona o exercício preenchido à lista */}
-                <TouchableOpacity
-                  style={[styles.buttonAction, adicionando && { opacity: 0.6 }]}
-                  onPress={handleAdicionarExercicio}
-                  disabled={adicionando}
-                >
-                  <Text style={styles.buttonActionText}>
-                    {adicionando ? 'Adicionando...' : '+ Adicionar ao treino'}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Exibe os exercícios que já foram adicionados */}
-                <Text style={[styles.label, { marginTop: 20 }]}>
-                  Exercícios do treino ({itensTreino.length})
-                </Text>
-
-                {itensTreino.length === 0 && (
-                  <Text style={styles.cardText}>Nenhum exercício adicionado ainda.</Text>
-                )}
-
-                {/* Mostra os detalhes de cada exercício e permite removê-lo */}
-                {itensTreino.map((item, index) => (
-                  <View key={index} style={styles.itemTreino}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.itemTreinoNome}>{item.nome}</Text>
-                      <Text style={styles.itemTreinoDetalhe}>
-                        {item.series}x{item.repeticoes} · Descanso: {item.descanso}
-
                       </Text>
                     </View>
-
 
                     <Text style={styles.label}>Objetivo do Treino</Text>
                     <TextInput
@@ -713,19 +578,6 @@ export default function InicioProfScreen() {
                     </TouchableOpacity>
                   </>
                 )}
-
-                {/* Botão para salvar o treino completo */}
-                <TouchableOpacity
-                  style={[styles.buttonPrimary, salvandoTreino && { opacity: 0.6 }]}
-                  onPress={handleSalvarTreino}
-                  disabled={salvandoTreino}
-                >
-                  <Text style={styles.buttonPrimaryText}>
-                    {salvandoTreino
-                      ? 'Salvando...'
-                      : `Salvar Treino de ${alunoSelecionado?.nome ?? ''}`}
-                  </Text>
-                </TouchableOpacity>
               </>
             )}
           </View>

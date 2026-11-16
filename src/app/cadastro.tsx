@@ -67,7 +67,7 @@ export default function CadastroScreen() {
   };
 
   return (
-    {/* Ajusta a tela quando o teclado aparece */}
+    /* Ajusta a tela quando o teclado aparece */
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

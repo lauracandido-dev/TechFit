@@ -85,10 +85,10 @@ export default function LoginScreen() {
           <Text style={styles.subtitleText}>Gestão para Academias</Text>
         </View>
 
-        {/* forms */}
+        /* forms */
         <View style={styles.formContainer}>
 
-          {/* email */}
+          /* email */
           <Text style={styles.label}>E-mail</Text>
           <TextInput
             style={styles.input}
@@ -100,7 +100,7 @@ export default function LoginScreen() {
             onChangeText={setEmail}
           />
 
-          {/* senha */}
+          /* senha */
           <Text style={styles.label}>Senha</Text>
           <TextInput
             style={styles.input}
@@ -111,7 +111,7 @@ export default function LoginScreen() {
             onChangeText={setSenha}
           />
 
-          {/* selecionar se é alu, prof ou nutri */}
+          /* selecionar se é alu, prof ou nutri */
           <Text style={styles.label}>Você é:</Text>
 
           {/* Opções para selecionar o tipo de usuário */}
@@ -144,7 +144,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* botao entrar */}
+          /* botao entrar */
           <TouchableOpacity
             style={[styles.buttonPrimary, carregando && styles.buttonDisabled]}
             onPress={handleLogin}
@@ -155,7 +155,7 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
 
-          {/* botao cadastro */}
+          /* botao cadastro */  
           <View style={styles.signupSection}>
             <Text style={styles.signupText}>Ainda não tem conta?</Text>
 
@@ -172,7 +172,7 @@ export default function LoginScreen() {
   );
 }
 
-{/* CSS */}
+/* CSS */
 const styles = StyleSheet.create({
   container: {
     flex: 1,

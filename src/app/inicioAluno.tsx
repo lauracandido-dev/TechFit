@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video'; // NOVO: player de vídeo
+import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video'; // player de vídeo
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -9,19 +9,19 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Vibration, // NOVO: atuador (vibração do celular)
+  Vibration, //(vibração do celular)
   View,
 } from 'react-native';
-import { WebView } from 'react-native-webview'; // NOVO: usado para o player do YouTube
+import { WebView } from 'react-native-webview'; //usado para o player do YouTube
 import { api, avisar } from '../services/api';
 import { getSessao, limparSessao, salvarSessao } from '../services/sessao';
 
-// ---------- Padrões de vibração (atuador) ----------
-// Pattern: [espera, vibra, espera, vibra...] em milissegundos
+//  Padrões de vibração (atuador) 
+//(espera, vibra, espera, vibra) em milissegundos
 const VIBRACAO_INSCRICAO = [0, 200, 100, 200]; // duas vibradas curtas = "confirmado"
 const VIBRACAO_CANCELAMENTO = 400;             // uma vibrada longa
 
-// ---------- Tipos do que a API devolve ----------
+//  Tipos do que a API devolve 
 interface AulaApi {
   id_aula: number;
   nome: string;
@@ -41,7 +41,7 @@ interface ExercicioApi {
   series: number;
   repeticoes: number;
   descanso: string;
-  gif_url: string | null; // NOVO: link do vídeo do exercício (pode ser nulo)
+  gif_url: string | null; //link do vídeo do exercício (pode ser nulo)
 }
 interface TreinoApi {
   id_treino: number;
@@ -63,7 +63,7 @@ interface ResumoApi {
   objetivo: string | null;
 }
 
-// ---------- Funções auxiliares ----------
+//  Funções auxiliares 
 
 // "2026-10-30" + "18:00:00" -> "Hoje, 18:00" / "Amanhã, 08:00" / "30/10, 18:00"
 function formatarQuando(data: string, horario: string) {
@@ -97,15 +97,14 @@ function separarRefeicoes(texto: string) {
     });
 }
 
-// NOVO: tira o ID do vídeo de um link do YouTube.
-// Funciona com youtu.be/ID, youtube.com/watch?v=ID, /embed/ID e /shorts/ID.
+// tira o ID do vídeo de um link do YouTube.
 // Se o link não for do YouTube, devolve null.
 function extrairIdYoutube(url: string): string | null {
   const m = url.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([A-Za-z0-9_-]{11})/);
   return m ? m[1] : null;
 }
 
-// NOVO: player para arquivo de vídeo direto (.mp4).
+// player para arquivo de vídeo direto.
 // Precisa ser um componente separado porque useVideoPlayer é um hook,
 // e hooks não podem ser chamados dentro de um .map() nem dentro de um if.
 function VideoMp4({ url }: { url: string }) {
@@ -123,9 +122,8 @@ function VideoMp4({ url }: { url: string }) {
   );
 }
 
-// NOVO: escolhe o player certo conforme o link guardado em gif_url.
-// - link do YouTube -> player embutido do YouTube (WebView)
-// - qualquer outro  -> arquivo de vídeo (.mp4) com expo-video
+// escolhe o player certo conforme o link guardado em gif_url.
+
 function VideoExercicio({ url }: { url: string }) {
   const idYoutube = extrairIdYoutube(url);
 
@@ -169,7 +167,7 @@ export default function InicioAlunoScreen() {
   const [aulas, setAulas] = useState<AulaApi[]>([]);
   const [reservas, setReservas] = useState<Record<number, number>>({}); // id_aula -> id_reserva ativa
 
-  // ---------- Sair e tratamento de erros ----------
+  // Sair e tratamento de erros 
   const sair = () => {
     limparSessao();
     router.replace('/');
@@ -183,7 +181,7 @@ export default function InicioAlunoScreen() {
     avisar('Erro', e.message);
   };
 
-  // ---------- Carregamento dos dados ----------
+  // Carregamento dos dados 
   const carregarAulas = async () => {
     const [listaAulas, minhas] = await Promise.all([
       api<AulaApi[]>('/aulas', {}, token),
@@ -240,7 +238,7 @@ export default function InicioAlunoScreen() {
   }, [abaAtiva, carregando]);
 
 
-  // ---------- Ações ----------
+  // Acoes 
   const handleSalvarPerfil = async () => {
     if (!alunoNome.trim() || !alunoEmail.trim()) {
       avisar('Erro', 'Preencha o nome e o e-mail.');
@@ -280,11 +278,11 @@ export default function InicioAlunoScreen() {
     try {
       if (idReserva) {
         await api(`/reservas/${idReserva}/cancelar`, { method: 'PATCH' }, token);
-        Vibration.vibrate(VIBRACAO_CANCELAMENTO); // NOVO: vibra ao cancelar
+        Vibration.vibrate(VIBRACAO_CANCELAMENTO); //  vibra ao cancelar
         avisar('Inscrição Cancelada', `Você saiu da aula de ${aula.nome}.`);
       } else {
         await api('/reservas', { method: 'POST', body: JSON.stringify({ id_aula: aula.id_aula }) }, token);
-        Vibration.vibrate(VIBRACAO_INSCRICAO); // NOVO: vibra ao se inscrever
+        Vibration.vibrate(VIBRACAO_INSCRICAO); //  vibra ao se inscrever
         avisar('Sucesso!', `Você garantiu sua vaga na aula de ${aula.nome}!`);
       }
       await carregarAulas();
@@ -319,7 +317,7 @@ export default function InicioAlunoScreen() {
 
         ) : abaAtiva === 'inicio' ? (
           <View>
-            {/* Tela inicial com o resumo da conta */}
+            /* Tela inicial com o resumo da conta */
             <Text style={styles.sectionTitle}>Resumo da sua Conta</Text>
 
             <View style={styles.card}>
@@ -334,7 +332,7 @@ export default function InicioAlunoScreen() {
             </View>
 
             <View style={styles.cardInfoBox}>
-              <Text style={styles.infoBoxText}>💡 Dica do dia: Mantenha-se hidratado e não pule o descanso entre as séries!</Text>
+              <Text style={styles.infoBoxText}>Dica do dia: Mantenha-se hidratado e não pule o descanso entre as séries!</Text>
             </View>
           </View>
 
@@ -351,7 +349,7 @@ export default function InicioAlunoScreen() {
                   <View key={item.id_exercicio} style={styles.cardTreino}>
                     <Text style={styles.cardTitleTreino}>{item.nome}</Text>
 
-                    {/* NOVO: vídeo entre o nome e as séries.
+                    {/* vídeo entre o nome e as séries.
                         Só aparece se o exercício tiver URL cadastrada no banco (gif_url). */}
                     {!!item.gif_url && <VideoExercicio url={item.gif_url} />}
 

@@ -61,45 +61,9 @@ As telas foram organizadas em arquivos separados, de acordo com suas funcionalid
 | `inicioProf.tsx` | Painel do professor |
 | `inicioNutri.tsx` | Painel da nutricionista |
 
-## Como executar o projeto
-
-### Pré-requisitos
-
-- Node.js instalado.
-- npm instalado.
-- Expo Go no celular ou um emulador configurado.
-
-### Instalação
-
-1. Clone o repositório:
-
-```bash
-git clone https://github.com/lauracandido-dev/TechFit.git
-```
-
-2. Entre na pasta do projeto:
-
-```bash
-cd TechFit
-```
-
-3. Instale as dependências:
-
-```bash
-npm install
-```
-
-4. Inicie a aplicação:
-
-```bash
-npx expo start
-```
-
-Após iniciar, será possível abrir o aplicativo pelo Expo Go ou por um emulador Android/iOS.
-
 ## Objetivo acadêmico
 
-O TechFit foi desenvolvido no segundo semestre de 2026, como parte da disciplina de Engenharia de Software do Centro Universitário FEI.
+O TechFit foi desenvolvido no segundo semestre de 2026, como parte da disciplina de Desenvolvimento de Aplicativos Móveis do Centro Universitário FEI.
 
 O projeto permitiu aplicar conhecimentos de desenvolvimento mobile, organização de componentes, navegação entre telas e utilização de TypeScript com React Native.
 
